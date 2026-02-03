@@ -13,7 +13,7 @@ function Dashboard() {
   const { user } = useAuth();
   const { playlists, isLoading: playlistsLoading, addPlaylist, refetchPlaylists, toggleCollaboratorMark, fetchPlaylistDetails } = usePlaylists();
   const [selectedPlaylistId, setSelectedPlaylistId] = useState<string | null>(null);
-  const [sortConfig, setSortConfig] = useState<SortConfig>({ option: 'added_at', direction: 'asc' });
+  const [sortConfig, setSortConfig] = useState<SortConfig>({ option: 'custom', direction: 'asc' });
   const [groupBy, setGroupBy] = useState<'none' | 'genre' | 'album'>('none');
   const [manualTracks, setManualTracks] = useState<TrackWithGenres[] | null>(null);
   const [hasChanges, setHasChanges] = useState(false);
@@ -31,7 +31,7 @@ function Dashboard() {
     setManualTracks(null);
     setHasChanges(false);
     setInitialSortApplied(false);
-    setSortConfig({ option: 'added_at', direction: 'asc' });
+    setSortConfig({ option: 'custom', direction: 'asc' });
     
     // Seçilen playlist için detaylı bilgileri al (followers vs.)
     if (selectedPlaylistId) {
@@ -79,6 +79,7 @@ function Dashboard() {
   );
 
   const sortLabels: Record<string, string> = {
+    'custom': 'Playlist Sırası',
     'added_at': 'Eklenme Tarihi',
     'name': 'Şarkı Adı',
     'artist': 'Sanatçı',
@@ -91,7 +92,7 @@ function Dashboard() {
 
   const currentSortLabel = manualTracks 
     ? (sortConfig.option === 'random' ? 'Rastgele sıralama' : 'Manuel sıralama')
-    : `${sortLabels[sortConfig.option]}${sortConfig.option !== 'random' ? ` (${sortConfig.direction === 'asc' ? '↑' : '↓'})` : ''}`;
+    : `${sortLabels[sortConfig.option]}${(sortConfig.option !== 'random' && sortConfig.option !== 'custom') ? ` (${sortConfig.direction === 'asc' ? '↑' : '↓'})` : ''}`;
 
   // Drag & drop ile sıralama değişti
   const handleTracksReorder = (newTracks: TrackWithGenres[]) => {
@@ -215,7 +216,9 @@ function Dashboard() {
           tracks={sortedTracks}
           selectedPlaylist={selectedPlaylist}
           onSuccess={() => {
-            refetch();
+            setManualTracks(null); // Önce manuel sıralamayı temizle
+            setSortConfig({ option: 'custom', direction: 'asc' }); // Sıralamayı sıfırla
+            refetch(); // Sonra yeni veriyi çek
             refetchPlaylists();
             setHasChanges(false);
           }}
@@ -251,7 +254,7 @@ function Dashboard() {
             
             setSortConfig(config);
             setManualTracks(null);
-            if (initialSortApplied && (config.option !== 'added_at' || config.direction !== 'asc')) {
+            if (initialSortApplied && config.option !== 'custom') {
               setHasChanges(true);
             }
           }}

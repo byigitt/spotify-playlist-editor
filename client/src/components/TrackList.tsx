@@ -23,6 +23,7 @@ interface TrackListProps {
 }
 
 const sortOptions: { value: SortOption; label: string }[] = [
+  { value: 'custom', label: 'Playlist Sırası' },
   { value: 'added_at', label: 'Eklenme Tarihi' },
   { value: 'name', label: 'Şarkı Adı' },
   { value: 'artist', label: 'Sanatçı' },

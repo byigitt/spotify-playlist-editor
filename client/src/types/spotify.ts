@@ -77,7 +77,7 @@ export interface SpotifyPlaylist {
   _markedAsCollaborator?: boolean;
 }
 
-export type SortOption = 'genre' | 'album' | 'artist' | 'release_date' | 'added_at' | 'popularity' | 'name' | 'random';
+export type SortOption = 'custom' | 'genre' | 'album' | 'artist' | 'release_date' | 'added_at' | 'popularity' | 'name' | 'random';
 export type SortDirection = 'asc' | 'desc';
 
 export interface SortConfig {

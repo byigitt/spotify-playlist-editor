@@ -235,6 +235,11 @@ export function usePlaylistTracks(playlistId: string | null) {
 }
 
 export function sortTracks(tracks: TrackWithGenres[], config: SortConfig): TrackWithGenres[] {
+  // Custom (Playlist Sırası) - orijinal sırayı koru
+  if (config.option === 'custom') {
+    return tracks;
+  }
+
   // Random sıralama için Fisher-Yates shuffle
   if (config.option === 'random') {
     const shuffled = [...tracks];

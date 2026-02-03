@@ -34,6 +34,11 @@ async function fetchApi<T>(endpoint: string, options?: RequestInit & { session?:
       throw new ApiError('Bu playlist\'i düzenleme yetkiniz yok', 403);
     }
     
+    // 404 Not Found - Collaborator olmadığında Spotify bu hatayı veriyor
+    if (response.status === 404) {
+      throw new ApiError('Bu playlist\'e erişim yetkiniz yok. Collaborator değilsiniz.', 404);
+    }
+    
     throw new ApiError(error.error || 'Request failed', response.status);
   }
 

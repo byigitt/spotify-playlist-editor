@@ -77,14 +77,15 @@ export function ActionPanel({ tracks, selectedPlaylist, onSuccess, onSortByGenre
     setUnavailableMarket('');
   };
 
-  // 403 hatasını handle et - collaborator değilse işareti kaldır
+  // 403/404 hatasını handle et - collaborator değilse işareti kaldır
   const handleApiError = (error: unknown) => {
-    if (error instanceof ApiError && error.status === 403) {
+    // 403 Forbidden veya 404 Not Found - ikisi de yetki hatası anlamına geliyor
+    if (error instanceof ApiError && (error.status === 403 || error.status === 404)) {
       setMessage({ 
         type: 'error', 
-        text: 'Bu playlist\'i düzenleme yetkiniz yok. Collaborator işareti kaldırıldı.' 
+        text: 'Bu playlist\'i düzenleme yetkiniz yok. Collaborator değilsiniz - işaret kaldırıldı.' 
       });
-      // Collaborator olarak işaretlenmişse kaldır
+      // Collaborator olarak işaretlenmişse kaldır (API'nin verdiği collaborative değilse, manuel işaretlenmiş)
       if (isCollaborator && !selectedPlaylist?.collaborative) {
         onToggleCollaborator();
       }

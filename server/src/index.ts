@@ -341,8 +341,17 @@ app.get("/api/playlists/:id/unavailable", authMiddleware, async (req, res) => {
       total: unavailableTracks.length,
       market: userMarket
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Get unavailable tracks error:", error);
+    
+    // Spotify API hatalarını frontend'e ilet
+    if (error?.statusCode === 403) {
+      return res.status(403).json({ error: "Bu playlist'e erişim yetkiniz yok" });
+    }
+    if (error?.statusCode === 404) {
+      return res.status(404).json({ error: "Playlist bulunamadı veya erişim yetkiniz yok" });
+    }
+    
     res.status(500).json({ error: "Failed to get unavailable tracks" });
   }
 });
@@ -422,8 +431,17 @@ app.delete("/api/playlists/:id/unavailable", authMiddleware, async (req, res) =>
     cache.deletePattern(`playlists:*`);
 
     res.json({ success: true, removed: positions.length });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Remove unavailable tracks error:", error);
+    
+    // Spotify API hatalarını frontend'e ilet
+    if (error?.statusCode === 403) {
+      return res.status(403).json({ error: "Bu playlist'i düzenleme yetkiniz yok" });
+    }
+    if (error?.statusCode === 404) {
+      return res.status(404).json({ error: "Playlist bulunamadı veya erişim yetkiniz yok" });
+    }
+    
     res.status(500).json({ error: "Failed to remove unavailable tracks" });
   }
 });
@@ -521,8 +539,17 @@ app.post("/api/playlists/:id/tracks", authMiddleware, async (req, res) => {
     cache.delete(`playlist:${req.params.id}`);
 
     res.json({ success: true });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Add tracks error:", error);
+    
+    // Spotify API hatalarını frontend'e ilet
+    if (error?.statusCode === 403) {
+      return res.status(403).json({ error: "Bu playlist'e şarkı ekleme yetkiniz yok" });
+    }
+    if (error?.statusCode === 404) {
+      return res.status(404).json({ error: "Playlist bulunamadı veya erişim yetkiniz yok" });
+    }
+    
     res.status(500).json({ error: "Failed to add tracks" });
   }
 });
@@ -559,8 +586,17 @@ app.post("/api/playlists/:id/reorder/preview", authMiddleware, async (req, res) 
       estimatedTimeFormatted: formatTime(estimatedMs),
       recommendFastMode: stats.estimatedApiCalls > 50
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Preview error:", error);
+    
+    // Spotify API hatalarını frontend'e ilet
+    if (error?.statusCode === 403) {
+      return res.status(403).json({ error: "Bu playlist'e erişim yetkiniz yok" });
+    }
+    if (error?.statusCode === 404) {
+      return res.status(404).json({ error: "Playlist bulunamadı veya erişim yetkiniz yok" });
+    }
+    
     res.status(500).json({ error: "Failed to preview" });
   }
 });
@@ -663,8 +699,17 @@ app.put("/api/playlists/:id/tracks", authMiddleware, async (req, res) => {
     cache.deletePattern(`playlists:*`);
 
     res.json({ success: true, mode: 'sync', stats: { operations: stats.estimatedApiCalls } });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Reorder playlist error:", error);
+    
+    // Spotify API hatalarını frontend'e ilet
+    if (error?.statusCode === 403) {
+      return res.status(403).json({ error: "Bu playlist'i düzenleme yetkiniz yok" });
+    }
+    if (error?.statusCode === 404) {
+      return res.status(404).json({ error: "Playlist bulunamadı veya erişim yetkiniz yok" });
+    }
+    
     res.status(500).json({ error: "Failed to reorder playlist" });
   }
 });

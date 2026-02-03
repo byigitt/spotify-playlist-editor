@@ -85,12 +85,13 @@ function Dashboard() {
     'album': 'Albüm',
     'genre': 'Genre',
     'release_date': 'Yayın Tarihi',
-    'popularity': 'Popülerlik'
+    'popularity': 'Popülerlik',
+    'random': 'Rastgele'
   };
 
   const currentSortLabel = manualTracks 
-    ? 'Manuel sıralama' 
-    : `${sortLabels[sortConfig.option]} (${sortConfig.direction === 'asc' ? '↑' : '↓'})`;
+    ? (sortConfig.option === 'random' ? 'Rastgele sıralama' : 'Manuel sıralama')
+    : `${sortLabels[sortConfig.option]}${sortConfig.option !== 'random' ? ` (${sortConfig.direction === 'asc' ? '↑' : '↓'})` : ''}`;
 
   // Drag & drop ile sıralama değişti
   const handleTracksReorder = (newTracks: TrackWithGenres[]) => {
@@ -221,6 +222,21 @@ function Dashboard() {
           tracks={sortedTracks}
           sortConfig={sortConfig}
           onSortChange={(config) => {
+            // Random için yeniden karıştırma: shuffle yapıp manualTracks'a kaydet
+            if (config.option === 'random') {
+              const shuffled = [...tracks];
+              for (let i = shuffled.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+              }
+              setManualTracks(shuffled);
+              setSortConfig(config);
+              if (initialSortApplied) {
+                setHasChanges(true);
+              }
+              return;
+            }
+            
             setSortConfig(config);
             setManualTracks(null);
             if (initialSortApplied && (config.option !== 'added_at' || config.direction !== 'asc')) {

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ArrowUp, ArrowDown, Clock, Loader2, Music, GripVertical, RefreshCw } from 'lucide-react';
+import { ArrowUp, ArrowDown, Clock, Loader2, Music, GripVertical, RefreshCw, Shuffle } from 'lucide-react';
 import { TrackWithGenres, SortConfig, SortOption } from '../types/spotify';
 
 interface LoadingState {
@@ -30,6 +30,7 @@ const sortOptions: { value: SortOption; label: string }[] = [
   { value: 'genre', label: 'Tür (Genre)' },
   { value: 'release_date', label: 'Yayın Tarihi' },
   { value: 'popularity', label: 'Popülerlik' },
+  { value: 'random', label: 'Rastgele (Shuffle)' },
 ];
 
 function formatDuration(ms: number): string {
@@ -58,10 +59,15 @@ export function TrackList({
   };
 
   const handleDirectionToggle = () => {
-    onSortChange({ 
-      ...sortConfig, 
-      direction: sortConfig.direction === 'asc' ? 'desc' : 'asc' 
-    });
+    if (sortConfig.option === 'random') {
+      // Random için yeniden karıştır - aynı config'i gönder, App.tsx handle edecek
+      onSortChange({ ...sortConfig, option: 'random' });
+    } else {
+      onSortChange({ 
+        ...sortConfig, 
+        direction: sortConfig.direction === 'asc' ? 'desc' : 'asc' 
+      });
+    }
   };
 
   // Drag & Drop handlers
@@ -171,9 +177,9 @@ export function TrackList({
           <button 
             className="btn btn-icon"
             onClick={handleDirectionToggle}
-            title={sortConfig.direction === 'asc' ? 'Artan' : 'Azalan'}
+            title={sortConfig.option === 'random' ? 'Yeniden Karıştır' : (sortConfig.direction === 'asc' ? 'Artan' : 'Azalan')}
           >
-            {sortConfig.direction === 'asc' ? <ArrowUp size={18} /> : <ArrowDown size={18} />}
+            {sortConfig.option === 'random' ? <Shuffle size={18} /> : (sortConfig.direction === 'asc' ? <ArrowUp size={18} /> : <ArrowDown size={18} />)}
           </button>
         </div>
         

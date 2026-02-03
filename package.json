@@ -1,0 +1,32 @@
+{
+  "name": "bariscb-spotify-playlist-editor",
+  "version": "1.0.0",
+  "description": "bariscb Spotify Playlist Editor - sort by genre, album, and more",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/byigitt/spotify-playlist-editor.git"
+  },
+  "homepage": "https://github.com/byigitt/spotify-playlist-editor",
+  "bugs": {
+    "url": "https://github.com/byigitt/spotify-playlist-editor/issues"
+  },
+  "keywords": [
+    "spotify",
+    "playlist",
+    "music",
+    "spotify-api",
+    "playlist-manager"
+  ],
+  "author": "byigitt",
+  "license": "MIT",
+  "scripts": {
+    "dev": "concurrently \"bun run dev:server\" \"bun run dev:client\"",
+    "dev:client": "cd client && bun run dev",
+    "dev:server": "cd server && bun run dev",
+    "install:all": "bun install && cd client && bun install && cd ../server && bun install",
+    "build": "cd client && bun run build"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}

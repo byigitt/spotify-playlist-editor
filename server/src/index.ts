@@ -854,14 +854,20 @@ app.post("/api/playlists/:id/extract-genres", authMiddleware, async (req, res) =
   try {
     const accessToken = (req as any).accessToken;
     const spotifyApi = createSpotifyApi(accessToken);
-    const { genres, newPlaylistName } = req.body;
+    const { genres, newPlaylistName, copyToNew = true, removeFromOriginal = true } = req.body;
     
     if (!genres || !Array.isArray(genres) || genres.length === 0) {
       return res.status(400).json({ error: "genres array required" });
     }
     
-    if (!newPlaylistName || typeof newPlaylistName !== 'string') {
-      return res.status(400).json({ error: "newPlaylistName required" });
+    // En az bir işlem seçilmeli
+    if (!copyToNew && !removeFromOriginal) {
+      return res.status(400).json({ error: "En az bir işlem seçmelisiniz (kopyala veya sil)" });
+    }
+    
+    // Kopyalama yapılacaksa playlist adı gerekli
+    if (copyToNew && (!newPlaylistName || typeof newPlaylistName !== 'string')) {
+      return res.status(400).json({ error: "newPlaylistName required for copy operation" });
     }
     
     const genreSet = new Set(genres.map((g: string) => g.toLowerCase()));
@@ -932,44 +938,54 @@ app.post("/api/playlists/:id/extract-genres", authMiddleware, async (req, res) =
       return res.status(400).json({ error: "Seçilen genre'lara ait şarkı bulunamadı" });
     }
     
-    // Yeni playlist oluştur
-    const user = await rateLimiter.execute(() => spotifyApi.getMe());
-    const newPlaylist = await rateLimiter.execute(() => 
-      spotifyApi.createPlaylist(user.body.id, {
-        name: newPlaylistName,
-        description: `Extracted genres: ${genres.join(', ')}`,
-        public: false,
-      } as any)
-    );
+    let newPlaylistId: string | null = null;
+    let newPlaylistNameResult: string | null = null;
     
-    // Şarkıları yeni playlist'e ekle
-    for (let i = 0; i < tracksToExtract.length; i += 100) {
-      const batch = tracksToExtract.slice(i, i + 100);
-      await rateLimiter.execute(() => 
-        spotifyApi.addTracksToPlaylist(newPlaylist.body.id, batch)
+    // Yeni playlist'e kopyala
+    if (copyToNew) {
+      const user = await rateLimiter.execute(() => spotifyApi.getMe());
+      const newPlaylist = await rateLimiter.execute(() => 
+        spotifyApi.createPlaylist(user.body.id, {
+          name: newPlaylistName,
+          description: `Extracted genres: ${genres.join(', ')}`,
+          public: false,
+        } as any)
       );
+      
+      newPlaylistId = newPlaylist.body.id;
+      newPlaylistNameResult = newPlaylist.body.name;
+      
+      // Şarkıları yeni playlist'e ekle
+      for (let i = 0; i < tracksToExtract.length; i += 100) {
+        const batch = tracksToExtract.slice(i, i + 100);
+        await rateLimiter.execute(() => 
+          spotifyApi.addTracksToPlaylist(newPlaylist.body.id, batch)
+        );
+      }
     }
     
-    // Orijinal playlist'i güncelle (sadece kalan şarkıları tut)
-    // Güvenli yöntem: Unique URI'leri sil, sonra kalan şarkıları doğru sırayla ekle
-    
-    // Tüm unique URI'leri bul
-    const uniqueUrisToRemove = [...new Set([...tracksToExtract, ...tracksToKeep])];
-    
-    // Tüm şarkıları sil (her unique URI için bir silme - tüm duplicate'lar da gider)
-    for (let i = 0; i < uniqueUrisToRemove.length; i += 100) {
-      const batch = uniqueUrisToRemove.slice(i, i + 100).map(uri => ({ uri }));
-      await rateLimiter.execute(() => 
-        spotifyApi.removeTracksFromPlaylist(req.params.id, batch as any)
-      );
-    }
-    
-    // Kalan şarkıları ekle (tracksToKeep sırasına göre - duplicate'lar dahil)
-    for (let i = 0; i < tracksToKeep.length; i += 100) {
-      const batch = tracksToKeep.slice(i, i + 100);
-      await rateLimiter.execute(() => 
-        spotifyApi.addTracksToPlaylist(req.params.id, batch)
-      );
+    // Orijinalden sil
+    if (removeFromOriginal) {
+      // Güvenli yöntem: Unique URI'leri sil, sonra kalan şarkıları doğru sırayla ekle
+      
+      // Tüm unique URI'leri bul
+      const uniqueUrisToRemove = [...new Set([...tracksToExtract, ...tracksToKeep])];
+      
+      // Tüm şarkıları sil (her unique URI için bir silme - tüm duplicate'lar da gider)
+      for (let i = 0; i < uniqueUrisToRemove.length; i += 100) {
+        const batch = uniqueUrisToRemove.slice(i, i + 100).map(uri => ({ uri }));
+        await rateLimiter.execute(() => 
+          spotifyApi.removeTracksFromPlaylist(req.params.id, batch as any)
+        );
+      }
+      
+      // Kalan şarkıları ekle (tracksToKeep sırasına göre - duplicate'lar dahil)
+      for (let i = 0; i < tracksToKeep.length; i += 100) {
+        const batch = tracksToKeep.slice(i, i + 100);
+        await rateLimiter.execute(() => 
+          spotifyApi.addTracksToPlaylist(req.params.id, batch)
+        );
+      }
     }
     
     // Cache invalidate
@@ -981,9 +997,11 @@ app.post("/api/playlists/:id/extract-genres", authMiddleware, async (req, res) =
     res.json({ 
       success: true, 
       extractedCount: tracksToExtract.length,
-      remainingCount: tracksToKeep.length,
-      newPlaylistId: newPlaylist.body.id,
-      newPlaylistName: newPlaylist.body.name
+      remainingCount: removeFromOriginal ? tracksToKeep.length : allTracks.length,
+      newPlaylistId,
+      newPlaylistName: newPlaylistNameResult,
+      copied: copyToNew,
+      removed: removeFromOriginal
     });
   } catch (error: any) {
     console.error("Extract genres error:", error);

@@ -72,6 +72,8 @@ export function ActionPanel({ tracks, selectedPlaylist, onSuccess, onSortByGenre
   // Extract genres state
   const [selectedGenresForExtract, setSelectedGenresForExtract] = useState<Set<string>>(new Set());
   const [extractPlaylistName, setExtractPlaylistName] = useState<string>('');
+  const [extractCopyToNew, setExtractCopyToNew] = useState<boolean>(true);
+  const [extractRemoveFromOriginal, setExtractRemoveFromOriginal] = useState<boolean>(true);
 
   const resetConfirmation = () => {
     setConfirmStep(1);
@@ -82,6 +84,8 @@ export function ActionPanel({ tracks, selectedPlaylist, onSuccess, onSortByGenre
     setUnavailableMarket('');
     setSelectedGenresForExtract(new Set());
     setExtractPlaylistName('');
+    setExtractCopyToNew(true);
+    setExtractRemoveFromOriginal(true);
   };
 
   // 403/404 hatasını handle et - collaborator değilse işareti kaldır
@@ -335,7 +339,11 @@ export function ActionPanel({ tracks, selectedPlaylist, onSuccess, onSortByGenre
         setMessage({ type: 'error', text: 'En az bir genre seçmelisiniz' });
         return;
       }
-      if (!extractPlaylistName.trim()) {
+      if (!extractCopyToNew && !extractRemoveFromOriginal) {
+        setMessage({ type: 'error', text: 'En az bir işlem seçmelisiniz (kopyala veya sil)' });
+        return;
+      }
+      if (extractCopyToNew && !extractPlaylistName.trim()) {
         setMessage({ type: 'error', text: 'Playlist adı girmelisiniz' });
         return;
       }
@@ -353,13 +361,21 @@ export function ActionPanel({ tracks, selectedPlaylist, onSuccess, onSortByGenre
         session, 
         selectedPlaylist.id, 
         Array.from(selectedGenresForExtract),
-        extractPlaylistName.trim()
+        extractPlaylistName.trim(),
+        { copyToNew: extractCopyToNew, removeFromOriginal: extractRemoveFromOriginal }
       );
       
-      setMessage({ 
-        type: 'success', 
-        text: `${result.extractedCount} şarkı "${result.newPlaylistName}" playlist'ine taşındı!` 
-      });
+      // Sonuç mesajını oluştur
+      let successMessage = '';
+      if (result.copied && result.removed) {
+        successMessage = `${result.extractedCount} şarkı "${result.newPlaylistName}" playlist'ine taşındı!`;
+      } else if (result.copied) {
+        successMessage = `${result.extractedCount} şarkı "${result.newPlaylistName}" playlist'ine kopyalandı!`;
+      } else if (result.removed) {
+        successMessage = `${result.extractedCount} şarkı orijinal playlist'ten silindi!`;
+      }
+      
+      setMessage({ type: 'success', text: successMessage });
       onSuccess();
     } catch (error) {
       handleApiError(error);
@@ -829,12 +845,12 @@ export function ActionPanel({ tracks, selectedPlaylist, onSuccess, onSortByGenre
 
             {allGenresForExtract.length > 0 && (
               <button 
-                className="btn btn-danger"
+                className="btn btn-secondary"
                 onClick={handleExtractGenresClick}
                 disabled={isWorking}
               >
                 <Scissors size={18} />
-                <span>Genre'ları Ayır ve Taşı</span>
+                <span>Genre'lara Göre İşlem</span>
               </button>
             )}
           </>
@@ -1315,22 +1331,56 @@ export function ActionPanel({ tracks, selectedPlaylist, onSuccess, onSortByGenre
             {confirmStep === 1 ? (
               <>
                 <div className="modal-icon">
-                  <Scissors size={48} color="#ff5555" />
+                  <Scissors size={48} color="#1db954" />
                 </div>
-                <h3>Genre'ları Ayır ve Taşı</h3>
+                <h3>Genre'lara Göre İşlem Yap</h3>
                 <p className="modal-desc">
-                  Seçtiğiniz genre'lardaki şarkılar orijinal playlist'ten silinip yeni bir playlist'e taşınacak.
+                  Seçtiğiniz genre'lardaki şarkılar için işlem yapın.
                 </p>
                 
-                <div className="extract-playlist-name">
-                  <label>Yeni Playlist Adı:</label>
-                  <input
-                    type="text"
-                    value={extractPlaylistName}
-                    onChange={e => setExtractPlaylistName(e.target.value)}
-                    placeholder="Playlist adı"
-                  />
+                {/* İşlem Seçenekleri */}
+                <div className="extract-options">
+                  <label className="extract-option">
+                    <input
+                      type="checkbox"
+                      checked={extractCopyToNew}
+                      onChange={e => setExtractCopyToNew(e.target.checked)}
+                    />
+                    <div className="extract-option-content">
+                      <span className="extract-option-title">
+                        <Copy size={16} /> Yeni playlist'e kopyala
+                      </span>
+                      <span className="extract-option-desc">Seçilen şarkılar yeni bir playlist'e eklenecek</span>
+                    </div>
+                  </label>
+                  
+                  <label className="extract-option">
+                    <input
+                      type="checkbox"
+                      checked={extractRemoveFromOriginal}
+                      onChange={e => setExtractRemoveFromOriginal(e.target.checked)}
+                    />
+                    <div className="extract-option-content">
+                      <span className="extract-option-title">
+                        <Trash2 size={16} /> Orijinalden sil
+                      </span>
+                      <span className="extract-option-desc">Seçilen şarkılar bu playlist'ten silinecek</span>
+                    </div>
+                  </label>
                 </div>
+                
+                {/* Yeni playlist adı - sadece kopyala seçiliyse göster */}
+                {extractCopyToNew && (
+                  <div className="extract-playlist-name">
+                    <label>Yeni Playlist Adı:</label>
+                    <input
+                      type="text"
+                      value={extractPlaylistName}
+                      onChange={e => setExtractPlaylistName(e.target.value)}
+                      placeholder="Playlist adı"
+                    />
+                  </div>
+                )}
 
                 <div className="genre-select-header">
                   <span>Genre Seç ({selectedGenresForExtract.size} seçili - {selectedGenresTrackCount} şarkı)</span>
@@ -1354,44 +1404,70 @@ export function ActionPanel({ tracks, selectedPlaylist, onSuccess, onSortByGenre
                   ))}
                 </div>
 
-                <p className="modal-note">
-                  ⚠️ Seçilen genre'lardaki şarkılar orijinal playlist'ten <strong>silinecek</strong>!
-                </p>
+                {/* Uyarı mesajı - duruma göre değişir */}
+                {extractRemoveFromOriginal && (
+                  <p className="modal-note">
+                    ⚠️ Seçilen genre'lardaki şarkılar orijinal playlist'ten <strong>silinecek</strong>!
+                  </p>
+                )}
 
                 <div className="modal-actions">
                   <button className="btn btn-outline" onClick={resetConfirmation}>
                     <X size={18} /><span>Vazgeç</span>
                   </button>
                   <button 
-                    className="btn btn-danger" 
+                    className={`btn ${extractRemoveFromOriginal ? 'btn-danger' : 'btn-primary'}`}
                     onClick={handleExtractGenresConfirm}
-                    disabled={selectedGenresForExtract.size === 0 || !extractPlaylistName.trim()}
+                    disabled={
+                      selectedGenresForExtract.size === 0 || 
+                      (!extractCopyToNew && !extractRemoveFromOriginal) ||
+                      (extractCopyToNew && !extractPlaylistName.trim())
+                    }
                   >
-                    <Scissors size={18} /><span>Devam Et</span>
+                    <Scissors size={18} />
+                    <span>
+                      {extractCopyToNew && extractRemoveFromOriginal ? 'Taşı' : 
+                       extractCopyToNew ? 'Kopyala' : 
+                       extractRemoveFromOriginal ? 'Sil' : 'Seçim Yap'}
+                    </span>
                   </button>
                 </div>
               </>
             ) : (
               <>
                 <div className="modal-icon">
-                  <AlertTriangle size={48} color="#ff5555" />
+                  <AlertTriangle size={48} color={extractRemoveFromOriginal ? '#ff5555' : '#ffaa00'} />
                 </div>
                 <h3>Emin misin?</h3>
                 <p className="modal-desc">
-                  <strong>{selectedGenresTrackCount} şarkı</strong> orijinal playlist'ten silinecek ve 
-                  <strong> "{extractPlaylistName}"</strong> adlı yeni playlist'e taşınacak.
+                  <strong>{selectedGenresTrackCount} şarkı</strong> için:
                   <br /><br />
+                  {extractCopyToNew && (
+                    <>✓ <strong>"{extractPlaylistName}"</strong> adlı yeni playlist'e kopyalanacak<br /></>
+                  )}
+                  {extractRemoveFromOriginal && (
+                    <>✓ Orijinal playlist'ten silinecek<br /></>
+                  )}
+                  <br />
                   Seçilen genre'lar: <em>{Array.from(selectedGenresForExtract).join(', ')}</em>
-                  <br /><br />
-                  ⚠️ Bu işlem geri alınamaz!
+                  {extractRemoveFromOriginal && (
+                    <>
+                      <br /><br />
+                      ⚠️ Silme işlemi geri alınamaz!
+                    </>
+                  )}
                 </p>
                 <div className="modal-actions">
                   <button className="btn btn-outline" onClick={resetConfirmation}>
                     <X size={18} /><span>İptal</span>
                   </button>
-                  <button className="btn btn-danger" onClick={handleExtractGenresConfirm} disabled={isWorking}>
-                    {isWorking ? <Loader2 className="spin" size={18} /> : <Scissors size={18} />}
-                    <span>Taşı</span>
+                  <button 
+                    className={`btn ${extractRemoveFromOriginal ? 'btn-danger' : 'btn-primary'}`}
+                    onClick={handleExtractGenresConfirm} 
+                    disabled={isWorking}
+                  >
+                    {isWorking ? <Loader2 className="spin" size={18} /> : <Check size={18} />}
+                    <span>Onayla</span>
                   </button>
                 </div>
               </>

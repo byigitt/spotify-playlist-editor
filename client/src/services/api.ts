@@ -168,17 +168,30 @@ export const api = {
       body: JSON.stringify({ positions }),
     }),
 
-  // Extract genres from playlist (remove from original, add to new playlist)
-  extractGenres: (session: string, playlistId: string, genres: string[], newPlaylistName: string) =>
+  // Extract genres from playlist
+  extractGenres: (
+    session: string, 
+    playlistId: string, 
+    genres: string[], 
+    newPlaylistName: string,
+    options: { copyToNew: boolean; removeFromOriginal: boolean }
+  ) =>
     fetchApi<{
       success: boolean;
       extractedCount: number;
       remainingCount: number;
-      newPlaylistId: string;
-      newPlaylistName: string;
+      newPlaylistId: string | null;
+      newPlaylistName: string | null;
+      copied: boolean;
+      removed: boolean;
     }>(`/playlists/${playlistId}/extract-genres`, {
       method: 'POST',
       session,
-      body: JSON.stringify({ genres, newPlaylistName }),
+      body: JSON.stringify({ 
+        genres, 
+        newPlaylistName,
+        copyToNew: options.copyToNew,
+        removeFromOriginal: options.removeFromOriginal
+      }),
     }),
 };

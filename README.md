@@ -1,34 +1,25 @@
-# 🎵 bariscb Spotify Playlist Editor
+# Spotify Playlist Editor
 
-Spotify playlistlerini genre'lara göre ayır, albüme göre sırala, dilediğin gibi düzenle!
+Organize your Spotify playlists by genre, sort by album, release date, popularity, and more.
 
-[![GitHub](https://img.shields.io/github/license/byigitt/spotify-playlist-editor?style=for-the-badge)](https://github.com/byigitt/spotify-playlist-editor/blob/main/LICENSE)
-[![GitHub stars](https://img.shields.io/github/stars/byigitt/spotify-playlist-editor?style=for-the-badge)](https://github.com/byigitt/spotify-playlist-editor/stargazers)
-[![GitHub issues](https://img.shields.io/github/issues/byigitt/spotify-playlist-editor?style=for-the-badge)](https://github.com/byigitt/spotify-playlist-editor/issues)
+## Features
 
-![Spotify Playlist Organizer](https://img.shields.io/badge/Spotify-1DB954?style=for-the-badge&logo=spotify&logoColor=white)
-![Bun](https://img.shields.io/badge/Bun-000000?style=for-the-badge&logo=bun&logoColor=white)
-![React](https://img.shields.io/badge/React-61DAFB?style=for-the-badge&logo=react&logoColor=black)
-![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white)
+- **Spotify OAuth Login** - Secure Spotify account connection
+- **Split by Genre** - Automatically separate songs by their genres
+- **Sort by Album** - Group songs by their albums
+- **Sort by Release Date** - Bring older or newer songs to the front
+- **Sort by Popularity** - Find your most popular tracks
+- **Reorder Playlist** - Reorder your existing playlist
+- **Create New Playlist** - Create a new playlist with sorted tracks
+- **Auto-create Genre Playlists** - Create separate playlists for each genre
 
-## ✨ Özellikler
-
-- 🔐 **Spotify OAuth Giriş** - Güvenli Spotify hesap bağlantısı
-- 🎸 **Genre'lara Göre Ayırma** - Şarkıları otomatik olarak türlerine göre ayır
-- 💿 **Albüme Göre Sıralama** - Şarkıları albümlerine göre grupla
-- 📅 **Yayın Tarihine Göre Sıralama** - Eski veya yeni şarkıları öne çıkar
-- ⭐ **Popülerlik Sıralaması** - En popüler şarkıları bul
-- 🔄 **Playlist Yeniden Düzenleme** - Mevcut playlist'i yeniden sırala
-- ➕ **Yeni Playlist Oluşturma** - Sıralanmış şarkılarla yeni playlist yap
-- 🎯 **Genre'lara Göre Otomatik Playlist** - Her genre için ayrı playlist oluştur
-
-## 🛠️ Teknolojiler
+## Tech Stack
 
 ### Frontend
 - React 18
 - TypeScript
 - Vite
-- Lucide React (İkonlar)
+- Lucide React (Icons)
 - Context API
 
 ### Backend
@@ -36,45 +27,41 @@ Spotify playlistlerini genre'lara göre ayır, albüme göre sırala, dilediğin
 - Express
 - spotify-web-api-node
 
-## 🚀 Kurulum
+## Setup
 
-### 1. Spotify Developer Uygulaması Oluştur
+### 1. Create a Spotify Developer App
 
-1. [Spotify Developer Dashboard](https://developer.spotify.com/dashboard)'a git
-2. "Create App" ile yeni uygulama oluştur
-3. Redirect URI olarak `http://127.0.0.1:3001/api/auth/callback` ekle (**localhost değil 127.0.0.1!**)
-4. Client ID ve Client Secret'ı kopyala
+1. Go to [Spotify Developer Dashboard](https://developer.spotify.com/dashboard)
+2. Create a new app with "Create App"
+3. Add `http://127.0.0.1:3001/api/auth/callback` as a Redirect URI (**use 127.0.0.1, not localhost!**)
+4. Copy the Client ID and Client Secret
 
-### 2. Projeyi Kur
+### 2. Install Dependencies
 
 ```bash
-# Bağımlılıkları yükle
 bun run install:all
-
-# Server .env dosyasını düzenle
-# server/.env dosyasına Spotify bilgilerini gir
 ```
 
-### 3. Environment Değişkenleri
+### 3. Configure Environment Variables
 
-`server/.env` dosyasını düzenle:
+Edit `server/.env`:
 
 ```env
-SPOTIFY_CLIENT_ID=buraya_client_id
-SPOTIFY_CLIENT_SECRET=buraya_client_secret
+SPOTIFY_CLIENT_ID=your_client_id
+SPOTIFY_CLIENT_SECRET=your_client_secret
 SPOTIFY_REDIRECT_URI=http://127.0.0.1:3001/api/auth/callback
 CLIENT_URL=http://127.0.0.1:5173
 PORT=3001
 ```
 
-### 4. Çalıştır
+### 4. Run
 
 ```bash
-# Her iki servisi de başlat
+# Start both services
 bun run dev
 ```
 
-Veya ayrı ayrı:
+Or separately:
 
 ```bash
 # Backend (Terminal 1)
@@ -84,36 +71,36 @@ cd server && bun run dev
 cd client && bun run dev
 ```
 
-Uygulama şurada çalışacak: http://127.0.0.1:5173
+The app will be available at: http://127.0.0.1:5173
 
-## 📖 Kullanım
+## Usage
 
-1. **Giriş Yap** - "Spotify ile Giriş Yap" butonuna tıkla
-2. **Playlist Seç** - Sol panelden bir playlist seç
-3. **Sırala** - Sıralama seçeneklerini kullan (genre, albüm, tarih vs.)
-4. **Grupla** - Genre veya albüme göre grupla
-5. **Aksiyonlar**:
-   - 🔄 **Yeniden Sırala** - Mevcut playlist'i sıralanmış haliyle güncelle
-   - ➕ **Yeni Playlist** - Sıralanmış şarkılarla yeni playlist oluştur
-   - 🎸 **Genre'lara Ayır** - Her genre için ayrı playlist oluştur
+1. **Login** - Click "Login with Spotify"
+2. **Select Playlist** - Choose a playlist from the left panel
+3. **Sort** - Use sorting options (genre, album, date, etc.)
+4. **Group** - Group by genre or album
+5. **Actions**:
+   - **Reorder** - Update the existing playlist with the new order
+   - **New Playlist** - Create a new playlist with the sorted tracks
+   - **Split by Genre** - Create separate playlists for each genre
 
-## 🔒 İzinler
+## Required Permissions
 
-Uygulama şu Spotify izinlerini kullanır:
+The app uses the following Spotify scopes:
 
-- `user-read-private` - Kullanıcı bilgileri
-- `user-read-email` - E-posta
-- `playlist-read-private` - Özel playlistleri okuma
-- `playlist-read-collaborative` - Ortak playlistleri okuma
-- `playlist-modify-public` - Public playlistleri düzenleme
-- `playlist-modify-private` - Özel playlistleri düzenleme
+- `user-read-private` - User profile info
+- `user-read-email` - Email address
+- `playlist-read-private` - Read private playlists
+- `playlist-read-collaborative` - Read collaborative playlists
+- `playlist-modify-public` - Modify public playlists
+- `playlist-modify-private` - Modify private playlists
 
-## 📁 Proje Yapısı
+## Project Structure
 
 ```
 ├── client/                 # React Frontend
 │   ├── src/
-│   │   ├── components/     # React Componentleri
+│   │   ├── components/     # React Components
 │   │   ├── context/        # Auth Context
 │   │   ├── hooks/          # Custom Hooks
 │   │   ├── services/       # API Service
@@ -127,10 +114,10 @@ Uygulama şu Spotify izinlerini kullanır:
 └── package.json            # Root Package
 ```
 
-## 🤝 Katkıda Bulunma
+## Contributing
 
-Pull request'ler kabul edilir! Büyük değişiklikler için önce issue açınız.
+Pull requests are welcome. For major changes, please open an issue first.
 
-## 📜 Lisans
+## License
 
 MIT

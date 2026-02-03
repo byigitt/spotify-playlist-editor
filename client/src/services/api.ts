@@ -167,4 +167,18 @@ export const api = {
       session,
       body: JSON.stringify({ positions }),
     }),
+
+  // Extract genres from playlist (remove from original, add to new playlist)
+  extractGenres: (session: string, playlistId: string, genres: string[], newPlaylistName: string) =>
+    fetchApi<{
+      success: boolean;
+      extractedCount: number;
+      remainingCount: number;
+      newPlaylistId: string;
+      newPlaylistName: string;
+    }>(`/playlists/${playlistId}/extract-genres`, {
+      method: 'POST',
+      session,
+      body: JSON.stringify({ genres, newPlaylistName }),
+    }),
 };

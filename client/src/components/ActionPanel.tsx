@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { RefreshCw, Plus, Guitar, Loader2, X, Check, AlertCircle, AlertTriangle, ListOrdered, Copy, Lock, Disc3, Trash2, Users, Ban, Search, Shuffle } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
+import { RefreshCw, Plus, Guitar, Loader2, X, Check, AlertCircle, AlertTriangle, ListOrdered, Copy, Lock, Disc3, Trash2, Users, Ban, Search, Shuffle, Scissors } from 'lucide-react';
 import { TrackWithGenres, SpotifyPlaylist, UnavailableTrack } from '../types/spotify';
 import { api, ApiError } from '../services/api';
 import { useAuth } from '../context/AuthContext';
@@ -19,7 +19,7 @@ interface ActionPanelProps {
   isOwner: boolean;
 }
 
-type ConfirmationType = 'reorder' | 'reorder-genre' | 'reorder-album' | 'remove-duplicates' | 'remove-unavailable' | 'create-by-genre' | null;
+type ConfirmationType = 'reorder' | 'reorder-genre' | 'reorder-album' | 'remove-duplicates' | 'remove-unavailable' | 'create-by-genre' | 'extract-genres' | null;
 
 interface ReorderPreview {
   estimatedApiCalls: number;
@@ -69,6 +69,10 @@ export function ActionPanel({ tracks, selectedPlaylist, onSuccess, onSortByGenre
   const [unavailableMarket, setUnavailableMarket] = useState<string>('');
   const [isCheckingUnavailable, setIsCheckingUnavailable] = useState(false);
 
+  // Extract genres state
+  const [selectedGenresForExtract, setSelectedGenresForExtract] = useState<Set<string>>(new Set());
+  const [extractPlaylistName, setExtractPlaylistName] = useState<string>('');
+
   const resetConfirmation = () => {
     setConfirmStep(1);
     setConfirmationType(null);
@@ -76,6 +80,8 @@ export function ActionPanel({ tracks, selectedPlaylist, onSuccess, onSortByGenre
     setUseFastMode(false);
     setUnavailableTracks([]);
     setUnavailableMarket('');
+    setSelectedGenresForExtract(new Set());
+    setExtractPlaylistName('');
   };
 
   // 403/404 hatasını handle et - collaborator değilse işareti kaldır
@@ -149,9 +155,31 @@ export function ActionPanel({ tracks, selectedPlaylist, onSuccess, onSortByGenre
     setConfirmStep(1);
   };
 
-  const handleReorderByAlbumClick = () => {
-    setConfirmationType('reorder-album');
-    setConfirmStep(1);
+  const handleReorderByAlbumClick = async () => {
+    if (!session || !selectedPlaylist) return;
+    
+    setIsWorking(true);
+    try {
+      // Albüme göre sıralanmış URI'leri hesapla
+      const sortedTracks = [...tracks].sort((a, b) => {
+        if (!a.track || !b.track) return 0;
+        const albumCompare = a.track.album.name.localeCompare(b.track.album.name);
+        if (albumCompare !== 0) return albumCompare;
+        return a.track.album.release_date.localeCompare(b.track.album.release_date);
+      });
+      const uris = sortedTracks.filter(t => t.track).map(t => t.track!.uri);
+      
+      // Preview al
+      const preview = await api.previewReorder(session, selectedPlaylist.id, uris);
+      setReorderPreview(preview);
+      setUseFastMode(preview.recommendFastMode);
+      setConfirmationType('reorder-album');
+      setConfirmStep(1);
+    } catch (error) {
+      setMessage({ type: 'error', text: 'Preview alınamadı' });
+    } finally {
+      setIsWorking(false);
+    }
   };
 
   const handleRemoveDuplicatesClick = () => {
@@ -261,9 +289,104 @@ export function ActionPanel({ tracks, selectedPlaylist, onSuccess, onSortByGenre
 
   const genreGroupsInfo = getGenreGroupsInfo();
 
+  // Extract genres için tüm genre'ları al (minimum şarkı filtresi yok)
+  const allGenresForExtract = useMemo(() => {
+    const genreGroups = new Map<string, number>();
+    tracks.forEach(track => {
+      track.genres.forEach(genre => {
+        if (genre && genre !== 'Other') {
+          genreGroups.set(genre, (genreGroups.get(genre) || 0) + 1);
+        }
+      });
+    });
+    
+    return Array.from(genreGroups.entries())
+      .sort((a, b) => b[1] - a[1]); // Şarkı sayısına göre sırala
+  }, [tracks]);
+
+  // Seçilen genre'lardaki şarkı sayısı
+  const selectedGenresTrackCount = useMemo(() => {
+    if (selectedGenresForExtract.size === 0) return 0;
+    
+    const counted = new Set<string>();
+    tracks.forEach(track => {
+      if (track.track && track.genres.some(g => selectedGenresForExtract.has(g))) {
+        counted.add(track.track.uri);
+      }
+    });
+    return counted.size;
+  }, [tracks, selectedGenresForExtract]);
+
   const handleCreateByGenreClick = () => {
     setConfirmationType('create-by-genre');
     setConfirmStep(1);
+  };
+
+  const handleExtractGenresClick = () => {
+    setSelectedGenresForExtract(new Set());
+    setExtractPlaylistName(`${selectedPlaylist?.name || 'Playlist'} - Extracted`);
+    setConfirmationType('extract-genres');
+    setConfirmStep(1);
+  };
+
+  const handleExtractGenresConfirm = async () => {
+    if (confirmStep === 1) {
+      if (selectedGenresForExtract.size === 0) {
+        setMessage({ type: 'error', text: 'En az bir genre seçmelisiniz' });
+        return;
+      }
+      if (!extractPlaylistName.trim()) {
+        setMessage({ type: 'error', text: 'Playlist adı girmelisiniz' });
+        return;
+      }
+      setConfirmStep(2);
+      return;
+    }
+
+    if (!session || !selectedPlaylist || selectedGenresForExtract.size === 0) return;
+    
+    setIsWorking(true);
+    setMessage(null);
+    
+    try {
+      const result = await api.extractGenres(
+        session, 
+        selectedPlaylist.id, 
+        Array.from(selectedGenresForExtract),
+        extractPlaylistName.trim()
+      );
+      
+      setMessage({ 
+        type: 'success', 
+        text: `${result.extractedCount} şarkı "${result.newPlaylistName}" playlist'ine taşındı!` 
+      });
+      onSuccess();
+    } catch (error) {
+      handleApiError(error);
+    } finally {
+      setIsWorking(false);
+      resetConfirmation();
+    }
+  };
+
+  const toggleGenreSelection = (genre: string) => {
+    setSelectedGenresForExtract(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(genre)) {
+        newSet.delete(genre);
+      } else {
+        newSet.add(genre);
+      }
+      return newSet;
+    });
+  };
+
+  const selectAllGenres = () => {
+    setSelectedGenresForExtract(new Set(allGenresForExtract.map(([g]) => g)));
+  };
+
+  const deselectAllGenres = () => {
+    setSelectedGenresForExtract(new Set());
   };
 
   const handleCreateByGenreConfirm = async () => {
@@ -414,10 +537,19 @@ export function ActionPanel({ tracks, selectedPlaylist, onSuccess, onSortByGenre
         .filter(t => t.track)
         .map(t => t.track!.uri);
       
-      await api.reorderPlaylist(session, selectedPlaylist.id, uris);
-      setMessage({ type: 'success', text: 'Playlist albümlere göre sıralandı!' });
-      onSortByAlbum();
-      onSuccess();
+      const result = await api.reorderPlaylist(session, selectedPlaylist.id, uris, useFastMode);
+      
+      if (result.async && result.jobId) {
+        setActiveJob({ 
+          id: result.jobId, 
+          status: { status: 'running', progress: 0, message: 'Başlatılıyor...' } 
+        });
+        setMessage({ type: 'success', text: `İşlem arka planda devam ediyor (${result.estimatedTime})` });
+      } else {
+        setMessage({ type: 'success', text: 'Playlist albümlere göre sıralandı!' });
+        onSortByAlbum();
+        onSuccess();
+      }
     } catch (error) {
       handleApiError(error);
     } finally {
@@ -694,6 +826,17 @@ export function ActionPanel({ tracks, selectedPlaylist, onSuccess, onSortByGenre
               {isCheckingUnavailable ? <Loader2 className="spin" size={18} /> : <Search size={18} />}
               <span>Erişilemeyen Şarkıları Bul</span>
             </button>
+
+            {allGenresForExtract.length > 0 && (
+              <button 
+                className="btn btn-danger"
+                onClick={handleExtractGenresClick}
+                disabled={isWorking}
+              >
+                <Scissors size={18} />
+                <span>Genre'ları Ayır ve Taşı</span>
+              </button>
+            )}
           </>
         )}
       </div>
@@ -1017,9 +1160,40 @@ export function ActionPanel({ tracks, selectedPlaylist, onSuccess, onSortByGenre
                   <br /><br />
                   • Aynı albümdeki şarkılar yan yana gelecek<br />
                   • Albümler alfabetik sıralanacak
-                  <br /><br />
-                  ⚠️ Bu işlem geri alınamaz!
                 </p>
+                
+                {reorderPreview && (
+                  <div className="reorder-preview">
+                    <div className="preview-stat">
+                      <span>Tahmini süre:</span>
+                      <strong>{reorderPreview.estimatedTimeFormatted}</strong>
+                    </div>
+                    <div className="preview-stat">
+                      <span>İşlem sayısı:</span>
+                      <strong>{reorderPreview.estimatedApiCalls}</strong>
+                    </div>
+                    
+                    {reorderPreview.recommendFastMode && (
+                      <div className="fast-mode-option">
+                        <label className="fast-mode-toggle">
+                          <span className="fast-mode-label">Hızlı mod</span>
+                          <input 
+                            type="checkbox" 
+                            checked={useFastMode}
+                            onChange={(e) => setUseFastMode(e.target.checked)}
+                          />
+                          <span className="fast-mode-switch"></span>
+                        </label>
+                        <p className="fast-mode-note">
+                          {useFastMode 
+                            ? 'Çok hızlı, ama eklenme tarihleri sıfırlanacak'
+                            : 'Yavaş, ama eklenme tarihleri korunacak'}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+                
                 <div className="modal-actions">
                   <button className="btn btn-outline" onClick={resetConfirmation}>
                     <X size={18} /><span>Vazgeç</span>
@@ -1037,6 +1211,7 @@ export function ActionPanel({ tracks, selectedPlaylist, onSuccess, onSortByGenre
                 <h3>Emin misin?</h3>
                 <p className="modal-desc">
                   <strong>{tracks.length} şarkı</strong> albümlere göre yeniden sıralanacak.
+                  {useFastMode && <><br /><span style={{color: 'var(--warning)'}}>Hızlı mod - Eklenme tarihleri sıfırlanacak</span></>}
                 </p>
                 <div className="modal-actions">
                   <button className="btn btn-outline" onClick={resetConfirmation}>
@@ -1080,18 +1255,19 @@ export function ActionPanel({ tracks, selectedPlaylist, onSuccess, onSortByGenre
                     
                     {reorderPreview.recommendFastMode && (
                       <div className="fast-mode-option">
-                        <label>
+                        <label className="fast-mode-toggle">
+                          <span className="fast-mode-label">Hızlı mod</span>
                           <input 
                             type="checkbox" 
                             checked={useFastMode}
                             onChange={(e) => setUseFastMode(e.target.checked)}
                           />
-                          <span>⚡ Hızlı mod</span>
+                          <span className="fast-mode-switch"></span>
                         </label>
                         <p className="fast-mode-note">
                           {useFastMode 
-                            ? '✓ Çok hızlı, ama eklenme tarihleri sıfırlanacak'
-                            : '○ Yavaş, ama eklenme tarihleri korunacak'}
+                            ? 'Çok hızlı, ama eklenme tarihleri sıfırlanacak'
+                            : 'Yavaş, ama eklenme tarihleri korunacak'}
                         </p>
                       </div>
                     )}
@@ -1115,7 +1291,7 @@ export function ActionPanel({ tracks, selectedPlaylist, onSuccess, onSortByGenre
                 <h3>Son Onay</h3>
                 <p className="modal-desc">
                   <strong>{tracks.length} şarkı</strong> yeni sıraya göre kaydedilecek.
-                  {useFastMode && <><br /><span style={{color: 'var(--warning)'}}>⚡ Hızlı mod - Eklenme tarihleri sıfırlanacak</span></>}
+                  {useFastMode && <><br /><span style={{color: 'var(--warning)'}}>Hızlı mod - Eklenme tarihleri sıfırlanacak</span></>}
                 </p>
                 <div className="modal-actions">
                   <button className="btn btn-outline" onClick={resetConfirmation}>
@@ -1124,6 +1300,98 @@ export function ActionPanel({ tracks, selectedPlaylist, onSuccess, onSortByGenre
                   <button className="btn btn-danger" onClick={handleReorderConfirm} disabled={isWorking}>
                     {isWorking ? <Loader2 className="spin" size={18} /> : <Check size={18} />}
                     <span>Kaydet</span>
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Çift Onay Modal - Extract Genres */}
+      {confirmationType === 'extract-genres' && (
+        <div className="modal-overlay" onClick={resetConfirmation}>
+          <div className="modal modal-warning modal-wide" onClick={e => e.stopPropagation()}>
+            {confirmStep === 1 ? (
+              <>
+                <div className="modal-icon">
+                  <Scissors size={48} color="#ff5555" />
+                </div>
+                <h3>Genre'ları Ayır ve Taşı</h3>
+                <p className="modal-desc">
+                  Seçtiğiniz genre'lardaki şarkılar orijinal playlist'ten silinip yeni bir playlist'e taşınacak.
+                </p>
+                
+                <div className="extract-playlist-name">
+                  <label>Yeni Playlist Adı:</label>
+                  <input
+                    type="text"
+                    value={extractPlaylistName}
+                    onChange={e => setExtractPlaylistName(e.target.value)}
+                    placeholder="Playlist adı"
+                  />
+                </div>
+
+                <div className="genre-select-header">
+                  <span>Genre Seç ({selectedGenresForExtract.size} seçili - {selectedGenresTrackCount} şarkı)</span>
+                  <div className="genre-select-actions">
+                    <button className="btn-link" onClick={selectAllGenres}>Tümünü Seç</button>
+                    <button className="btn-link" onClick={deselectAllGenres}>Temizle</button>
+                  </div>
+                </div>
+                
+                <div className="genre-select-list">
+                  {allGenresForExtract.map(([genre, count]) => (
+                    <label key={genre} className="genre-select-item">
+                      <input
+                        type="checkbox"
+                        checked={selectedGenresForExtract.has(genre)}
+                        onChange={() => toggleGenreSelection(genre)}
+                      />
+                      <span className="genre-name">{genre}</span>
+                      <span className="genre-count">{count} şarkı</span>
+                    </label>
+                  ))}
+                </div>
+
+                <p className="modal-note">
+                  ⚠️ Seçilen genre'lardaki şarkılar orijinal playlist'ten <strong>silinecek</strong>!
+                </p>
+
+                <div className="modal-actions">
+                  <button className="btn btn-outline" onClick={resetConfirmation}>
+                    <X size={18} /><span>Vazgeç</span>
+                  </button>
+                  <button 
+                    className="btn btn-danger" 
+                    onClick={handleExtractGenresConfirm}
+                    disabled={selectedGenresForExtract.size === 0 || !extractPlaylistName.trim()}
+                  >
+                    <Scissors size={18} /><span>Devam Et</span>
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="modal-icon">
+                  <AlertTriangle size={48} color="#ff5555" />
+                </div>
+                <h3>Emin misin?</h3>
+                <p className="modal-desc">
+                  <strong>{selectedGenresTrackCount} şarkı</strong> orijinal playlist'ten silinecek ve 
+                  <strong> "{extractPlaylistName}"</strong> adlı yeni playlist'e taşınacak.
+                  <br /><br />
+                  Seçilen genre'lar: <em>{Array.from(selectedGenresForExtract).join(', ')}</em>
+                  <br /><br />
+                  ⚠️ Bu işlem geri alınamaz!
+                </p>
+                <div className="modal-actions">
+                  <button className="btn btn-outline" onClick={resetConfirmation}>
+                    <X size={18} /><span>İptal</span>
+                  </button>
+                  <button className="btn btn-danger" onClick={handleExtractGenresConfirm} disabled={isWorking}>
+                    {isWorking ? <Loader2 className="spin" size={18} /> : <Scissors size={18} />}
+                    <span>Taşı</span>
                   </button>
                 </div>
               </>

@@ -111,6 +111,17 @@ function Dashboard() {
     setHasChanges(true);
   };
 
+  const handleShuffle = () => {
+    const shuffled = [...tracks];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    setManualTracks(shuffled);
+    setSortConfig({ option: 'random', direction: 'asc' });
+    setHasChanges(true);
+  };
+
   if (!user) {
     return (
       <div className="landing">
@@ -210,6 +221,7 @@ function Dashboard() {
           }}
           onSortByGenre={handleSortByGenre}
           onSortByAlbum={handleSortByAlbum}
+          onShuffle={handleShuffle}
           canEdit={canEditPlaylist}
           isCollaborator={isCollaborator}
           currentSort={currentSortLabel}

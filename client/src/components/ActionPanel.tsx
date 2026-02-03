@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { RefreshCw, Plus, Guitar, Loader2, X, Check, AlertCircle, AlertTriangle, ListOrdered, Copy, Lock, Disc3, Trash2, Users, Ban, Search } from 'lucide-react';
+import { RefreshCw, Plus, Guitar, Loader2, X, Check, AlertCircle, AlertTriangle, ListOrdered, Copy, Lock, Disc3, Trash2, Users, Ban, Search, Shuffle } from 'lucide-react';
 import { TrackWithGenres, SpotifyPlaylist, UnavailableTrack } from '../types/spotify';
 import { api, ApiError } from '../services/api';
 import { useAuth } from '../context/AuthContext';
@@ -10,6 +10,7 @@ interface ActionPanelProps {
   onSuccess: () => void;
   onSortByGenre: () => void;
   onSortByAlbum: () => void;
+  onShuffle: () => void;
   canEdit: boolean;
   isCollaborator: boolean;
   currentSort: string;
@@ -32,7 +33,7 @@ interface JobStatus {
   message: string;
 }
 
-export function ActionPanel({ tracks, selectedPlaylist, onSuccess, onSortByGenre, onSortByAlbum, canEdit, isCollaborator, currentSort, hasManualChanges, onToggleCollaborator, isOwner }: ActionPanelProps) {
+export function ActionPanel({ tracks, selectedPlaylist, onSuccess, onSortByGenre, onSortByAlbum, onShuffle, canEdit, isCollaborator, currentSort, hasManualChanges, onToggleCollaborator, isOwner }: ActionPanelProps) {
   const { session } = useAuth();
   const [isWorking, setIsWorking] = useState(false);
   const [newPlaylistName, setNewPlaylistName] = useState('');
@@ -654,6 +655,15 @@ export function ActionPanel({ tracks, selectedPlaylist, onSuccess, onSortByGenre
             >
               <Disc3 size={18} />
               <span>Albüme Göre Sırala</span>
+            </button>
+
+            <button 
+              className="btn btn-warning"
+              onClick={onShuffle}
+              disabled={isWorking}
+            >
+              <Shuffle size={18} />
+              <span>Karıştır</span>
             </button>
 
             <button 

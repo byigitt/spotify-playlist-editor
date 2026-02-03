@@ -376,6 +376,44 @@ body {
   overflow: hidden;
 }
 
+.playlist-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+}
+
+.playlist-header-row h2 {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  margin-bottom: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.playlist-header-row .btn-refresh {
+  padding: 0.35rem;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+
+.playlist-header-row .btn-refresh:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.playlist-header-row .btn-refresh:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .playlist-list h2 {
   font-size: 0.85rem;
   color: var(--text-secondary);

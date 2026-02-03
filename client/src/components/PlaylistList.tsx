@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ListMusic, Music, Loader2, Search, Link, Lock, Users } from 'lucide-react';
+import { ListMusic, Music, Loader2, Search, Link, Lock, Users, RefreshCw } from 'lucide-react';
 import { SpotifyPlaylist } from '../types/spotify';
 import { useAuth } from '../context/AuthContext';
 
@@ -10,9 +10,11 @@ interface PlaylistListProps {
   isLoading: boolean;
   userId: string | null;
   onPlaylistImport: (playlist: SpotifyPlaylist) => void;
+  onRefresh?: () => void;
+  isRefreshing?: boolean;
 }
 
-export function PlaylistList({ playlists, selectedId, onSelect, isLoading, userId, onPlaylistImport }: PlaylistListProps) {
+export function PlaylistList({ playlists, selectedId, onSelect, isLoading, userId, onPlaylistImport, onRefresh, isRefreshing }: PlaylistListProps) {
   const { session } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [showImportModal, setShowImportModal] = useState(false);
@@ -97,7 +99,19 @@ export function PlaylistList({ playlists, selectedId, onSelect, isLoading, userI
 
   return (
     <div className="playlist-list">
-      <h2><ListMusic size={18} /> Playlistlerim ({playlists.length})</h2>
+      <div className="playlist-header-row">
+        <h2><ListMusic size={18} /> Playlistlerim ({playlists.length})</h2>
+        {onRefresh && (
+          <button 
+            className="btn btn-icon btn-refresh"
+            onClick={onRefresh}
+            disabled={isRefreshing}
+            title="Playlistleri yenile"
+          >
+            <RefreshCw size={16} className={isRefreshing ? 'spin' : ''} />
+          </button>
+        )}
+      </div>
       
       <div className="playlist-search">
         <Search size={16} />

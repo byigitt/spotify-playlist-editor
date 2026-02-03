@@ -162,6 +162,8 @@ function Dashboard() {
           isLoading={playlistsLoading}
           userId={user?.id || null}
           onPlaylistImport={addPlaylist}
+          onRefresh={refetchPlaylists}
+          isRefreshing={playlistsLoading}
         />
       </aside>
       

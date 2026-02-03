@@ -53,6 +53,28 @@ export function usePlaylists() {
     }));
   };
 
+  // Seçilen playlist için detaylı bilgi al (followers vs.)
+  const fetchPlaylistDetails = useCallback(async (playlistId: string) => {
+    if (!session) return;
+    
+    try {
+      const details = await api.getPlaylist(session, playlistId);
+      setPlaylists(prev => prev.map(p => {
+        if (p.id === playlistId) {
+          return { 
+            ...p, 
+            followers: details.followers,
+            description: details.description || p.description,
+            public: details.public
+          };
+        }
+        return p;
+      }));
+    } catch (err) {
+      console.error('Failed to fetch playlist details:', err);
+    }
+  }, [session]);
+
   const refetchPlaylists = async () => {
     if (!session) return;
     
@@ -71,7 +93,7 @@ export function usePlaylists() {
     }
   };
 
-  return { playlists, isLoading, error, addPlaylist, refetchPlaylists, toggleCollaboratorMark };
+  return { playlists, isLoading, error, addPlaylist, refetchPlaylists, toggleCollaboratorMark, fetchPlaylistDetails };
 }
 
 interface LoadingState {

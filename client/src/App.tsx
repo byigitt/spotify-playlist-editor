@@ -11,7 +11,7 @@ import './App.css';
 
 function Dashboard() {
   const { user } = useAuth();
-  const { playlists, isLoading: playlistsLoading, addPlaylist, refetchPlaylists, toggleCollaboratorMark } = usePlaylists();
+  const { playlists, isLoading: playlistsLoading, addPlaylist, refetchPlaylists, toggleCollaboratorMark, fetchPlaylistDetails } = usePlaylists();
   const [selectedPlaylistId, setSelectedPlaylistId] = useState<string | null>(null);
   const [sortConfig, setSortConfig] = useState<SortConfig>({ option: 'added_at', direction: 'asc' });
   const [groupBy, setGroupBy] = useState<'none' | 'genre' | 'album'>('none');
@@ -26,13 +26,18 @@ function Dashboard() {
     refetch 
   } = usePlaylistTracks(selectedPlaylistId);
 
-  // Playlist değişince sıfırla
+  // Playlist değişince sıfırla ve detayları al
   useEffect(() => {
     setManualTracks(null);
     setHasChanges(false);
     setInitialSortApplied(false);
     setSortConfig({ option: 'added_at', direction: 'asc' });
-  }, [selectedPlaylistId]);
+    
+    // Seçilen playlist için detaylı bilgileri al (followers vs.)
+    if (selectedPlaylistId) {
+      fetchPlaylistDetails(selectedPlaylistId);
+    }
+  }, [selectedPlaylistId, fetchPlaylistDetails]);
 
   // Tracks yüklendiğinde initialSortApplied'ı true yap
   useEffect(() => {
@@ -159,8 +164,37 @@ function Dashboard() {
             </div>
             <div className="playlist-details">
               <h2>{selectedPlaylist.name}</h2>
-              <p>{selectedPlaylist.description}</p>
-              <span>{selectedPlaylist.tracks.total} şarkı</span>
+              {selectedPlaylist.description && (
+                <p className="playlist-description">{selectedPlaylist.description}</p>
+              )}
+              <div className="playlist-meta">
+                <a 
+                  href={`https://open.spotify.com/user/${selectedPlaylist.owner.id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="playlist-owner"
+                >
+                  {selectedPlaylist.owner.display_name}
+                </a>
+                <span className="playlist-separator">•</span>
+                {selectedPlaylist.followers && selectedPlaylist.followers.total > 0 && (
+                  <>
+                    <span className="playlist-followers">
+                      {selectedPlaylist.followers.total.toLocaleString('tr-TR')} beğenme
+                    </span>
+                    <span className="playlist-separator">•</span>
+                  </>
+                )}
+                <span className="playlist-tracks">{selectedPlaylist.tracks.total} şarkı</span>
+                {selectedPlaylist.public !== undefined && (
+                  <>
+                    <span className="playlist-separator">•</span>
+                    <span className="playlist-visibility">
+                      {selectedPlaylist.public ? 'Herkese Açık' : 'Gizli'}
+                    </span>
+                  </>
+                )}
+              </div>
             </div>
           </div>
         )}

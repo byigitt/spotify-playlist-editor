@@ -58,6 +58,9 @@ export const api = {
   getPlaylists: (session: string) => 
     fetchApi<{ items: SpotifyPlaylist[] }>('/playlists', { session }),
 
+  getPlaylist: (session: string, playlistId: string) =>
+    fetchApi<SpotifyPlaylist>(`/playlists/${playlistId}`, { session }),
+
   getPlaylistTracks: (session: string, playlistId: string) => 
     fetchApi<{ items: PlaylistTrackItem[]; total: number }>(
       `/playlists/${playlistId}/tracks`, 

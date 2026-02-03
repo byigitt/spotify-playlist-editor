@@ -66,6 +66,9 @@ export interface SpotifyPlaylist {
   tracks: {
     total: number;
   };
+  followers?: {
+    total: number;
+  };
   public: boolean;
   collaborative: boolean;
   /** Internal flag: true if from getUserPlaylists, false if imported via link */

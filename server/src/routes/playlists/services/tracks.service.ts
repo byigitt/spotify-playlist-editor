@@ -1,5 +1,5 @@
 import SpotifyWebApi from "spotify-web-api-node";
-import { rateLimiter, cache } from "../../../rateLimiter.js";
+import { rateLimiter } from "../../../rateLimiter.js";
 import { createSpotifyApi } from "../../../config.js";
 
 export interface TrackId {
@@ -89,15 +89,4 @@ export async function addTracksToPlaylist(accessToken: string, playlistId: strin
       spotifyApi.addTracksToPlaylist(playlistId, batch)
     );
   }
-
-  // Cache invalidate
-  cache.delete(`tracks:${playlistId}`);
-  cache.delete(`playlist:${playlistId}`);
-}
-
-export function invalidatePlaylistCache(playlistId: string) {
-  cache.delete(`tracks:${playlistId}`);
-  cache.delete(`track-ids:${playlistId}`);
-  cache.delete(`playlist:${playlistId}`);
-  cache.deletePattern(`playlists:*`);
 }

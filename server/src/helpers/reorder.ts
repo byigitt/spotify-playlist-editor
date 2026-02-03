@@ -1,5 +1,5 @@
 import SpotifyWebApi from "spotify-web-api-node";
-import { rateLimiter, cache } from "../rateLimiter.js";
+import { rateLimiter } from "../rateLimiter.js";
 import { getChangeStats } from "../reorderOptimizer.js";
 import { jobQueue } from "../jobQueue.js";
 import { createSpotifyApi } from "../config.js";
@@ -120,12 +120,6 @@ export async function processReorderJob(
         jobQueue.update(jobId, { progress, message });
       }
     );
-
-    // Cache invalidate
-    cache.delete(`tracks:${playlistId}`);
-    cache.delete(`track-ids:${playlistId}`);
-    cache.delete(`playlist:${playlistId}`);
-    cache.deletePattern(`playlists:*`);
 
     jobQueue.update(jobId, {
       status: 'completed',

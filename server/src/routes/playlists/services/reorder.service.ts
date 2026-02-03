@@ -1,9 +1,9 @@
-import { rateLimiter, cache } from "../../../rateLimiter.js";
+import { rateLimiter } from "../../../rateLimiter.js";
 import { createSpotifyApi } from "../../../config.js";
 import { getChangeStats, estimateTime } from "../../../reorderOptimizer.js";
 import { jobQueue } from "../../../jobQueue.js";
 import { formatTime, executeReorder, processReorderJob } from "../../../helpers/reorder.js";
-import { getPlaylistUris, invalidatePlaylistCache } from "./tracks.service.js";
+import { getPlaylistUris } from "./tracks.service.js";
 
 export interface ReorderPreviewResult {
   estimatedApiCalls: number;
@@ -75,8 +75,6 @@ export async function reorderPlaylist(
       );
     }
 
-    invalidatePlaylistCache(playlistId);
-
     return {
       success: true,
       mode: 'fast',
@@ -102,8 +100,6 @@ export async function reorderPlaylist(
 
   // Az move varsa senkron yap
   await executeReorder(spotifyApi, playlistId, currentUris, targetUris, stats);
-
-  invalidatePlaylistCache(playlistId);
 
   return {
     success: true,

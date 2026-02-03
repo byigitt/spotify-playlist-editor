@@ -1,6 +1,5 @@
-import { rateLimiter, cache } from "../../../rateLimiter.js";
+import { rateLimiter } from "../../../rateLimiter.js";
 import { createSpotifyApi } from "../../../config.js";
-import { invalidatePlaylistCache } from "./tracks.service.js";
 
 export interface UnavailableTrack {
   uri: string;
@@ -161,8 +160,6 @@ export async function removeUnavailableTracks(
       spotifyApi.addTracksToPlaylist(playlistId, batch)
     );
   }
-
-  invalidatePlaylistCache(playlistId);
 
   return { removed: positions.length };
 }

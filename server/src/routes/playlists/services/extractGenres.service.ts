@@ -1,6 +1,5 @@
-import { rateLimiter, cache } from "../../../rateLimiter.js";
+import { rateLimiter } from "../../../rateLimiter.js";
 import { createSpotifyApi } from "../../../config.js";
-import { invalidatePlaylistCache } from "./tracks.service.js";
 
 export interface ExtractGenresResult {
   success: boolean;
@@ -139,8 +138,6 @@ export async function extractGenresFromPlaylist(
       );
     }
   }
-
-  invalidatePlaylistCache(playlistId);
 
   return {
     success: true,

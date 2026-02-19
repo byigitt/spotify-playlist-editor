@@ -14,7 +14,6 @@ export interface ExtractGenresResult {
 interface TrackWithArtists {
   uri: string;
   artistIds: string[];
-  index: number;
 }
 
 export async function extractGenresFromPlaylist(
@@ -38,12 +37,11 @@ export async function extractGenresFromPlaylist(
       spotifyApi.getPlaylistTracks(playlistId, { offset, limit })
     );
 
-    data.body.items.forEach((item: any, idx: number) => {
+    data.body.items.forEach((item: any) => {
       if (item.track?.uri && !item.track.is_local) {
         allTracks.push({
           uri: item.track.uri,
-          artistIds: item.track.artists?.map((a: any) => a.id).filter((id: string) => id) || [],
-          index: offset + idx
+          artistIds: item.track.artists?.map((a: any) => a.id).filter(Boolean) || [],
         });
       }
     });
@@ -73,15 +71,11 @@ export async function extractGenresFromPlaylist(
   const tracksToKeep: string[] = [];
 
   for (const track of allTracks) {
-    const trackGenres: string[] = [];
-    for (const artistId of track.artistIds) {
-      const genres = artistGenres[artistId] || [];
-      trackGenres.push(...genres);
-    }
+    const matchesGenre = track.artistIds.some(artistId =>
+      (artistGenres[artistId] || []).some(g => genreSet.has(g.toLowerCase()))
+    );
 
-    const matchesSelectedGenre = trackGenres.some(g => genreSet.has(g.toLowerCase()));
-
-    if (matchesSelectedGenre) {
+    if (matchesGenre) {
       tracksToExtract.push(track.uri);
     } else {
       tracksToKeep.push(track.uri);

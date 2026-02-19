@@ -49,25 +49,17 @@ class TrackCache {
           this.cache = new Map(Object.entries(parsed.tracks));
         }
       }
-      this.initialized = true;
     } catch (e) {
       console.warn('Failed to load track cache:', e);
       this.cache = new Map();
+    } finally {
       this.initialized = true;
     }
   }
 
   private save() {
     try {
-      // Cache çok büyükse eski entries'leri sil
-      if (this.cache.size > MAX_CACHE_SIZE) {
-        const entries = Array.from(this.cache.entries())
-          .sort((a, b) => a[1].cachedAt - b[1].cachedAt);
-        
-        const toRemove = entries.slice(0, entries.length - MAX_CACHE_SIZE + 500);
-        toRemove.forEach(([key]) => this.cache.delete(key));
-      }
-
+      this.evictIfNeeded();
       const data: CacheData = {
         version: CACHE_VERSION,
         tracks: Object.fromEntries(this.cache)
@@ -75,11 +67,17 @@ class TrackCache {
       localStorage.setItem(CACHE_KEY, JSON.stringify(data));
     } catch (e) {
       console.warn('Failed to save track cache:', e);
-      // localStorage dolu olabilir, eski verileri temizle
-      try {
-        localStorage.removeItem(CACHE_KEY);
-      } catch {}
+      try { localStorage.removeItem(CACHE_KEY); } catch {}
     }
+  }
+
+  private evictIfNeeded() {
+    if (this.cache.size <= MAX_CACHE_SIZE) return;
+    
+    const entries = Array.from(this.cache.entries())
+      .sort((a, b) => a[1].cachedAt - b[1].cachedAt);
+    const toRemove = entries.slice(0, entries.length - MAX_CACHE_SIZE + 500);
+    for (const [key] of toRemove) this.cache.delete(key);
   }
 
   get(trackId: string): CachedTrack | null {

@@ -15,6 +15,29 @@ export interface UnavailableTracksResult {
   market: string;
 }
 
+function getArtistNames(track: any): string {
+  return track.artists?.map((a: any) => a.name).join(', ') || 'Bilinmiyor';
+}
+
+function detectUnavailableTrack(item: any, index: number): UnavailableTrack | null {
+  if (!item.track) {
+    return { uri: '', name: '(Silinmiş Şarkı)', artist: 'Bilinmiyor', reason: 'deleted', index };
+  }
+
+  const track = item.track;
+  if (track.is_local) {
+    return { uri: track.uri, name: track.name || 'Local File', artist: getArtistNames(track), reason: 'local', index };
+  }
+  if (track.is_playable === false) {
+    return { uri: track.uri, name: track.name, artist: getArtistNames(track), reason: 'region', index };
+  }
+  if (track.restrictions) {
+    return { uri: track.uri, name: track.name, artist: getArtistNames(track), reason: 'restricted', index };
+  }
+
+  return null;
+}
+
 export async function getUnavailableTracks(
   accessToken: string,
   playlistId: string
@@ -43,49 +66,8 @@ export async function getUnavailableTracks(
     );
 
     for (const item of data.body.items) {
-      // Track null ise - silinmiş/kaldırılmış
-      if (!item.track) {
-        unavailableTracks.push({
-          uri: '',
-          name: '(Silinmiş Şarkı)',
-          artist: 'Bilinmiyor',
-          reason: 'deleted',
-          index
-        });
-      } else {
-        const track = item.track as any;
-
-        // Local file kontrolü
-        if (track.is_local) {
-          unavailableTracks.push({
-            uri: track.uri,
-            name: track.name || 'Local File',
-            artist: track.artists?.map((a: any) => a.name).join(', ') || 'Bilinmiyor',
-            reason: 'local',
-            index
-          });
-        }
-        // Playable değilse - bölge kısıtlaması
-        else if (track.is_playable === false) {
-          unavailableTracks.push({
-            uri: track.uri,
-            name: track.name,
-            artist: track.artists?.map((a: any) => a.name).join(', ') || 'Bilinmiyor',
-            reason: 'region',
-            index
-          });
-        }
-        // Restriction varsa
-        else if (track.restrictions) {
-          unavailableTracks.push({
-            uri: track.uri,
-            name: track.name,
-            artist: track.artists?.map((a: any) => a.name).join(', ') || 'Bilinmiyor',
-            reason: 'restricted',
-            index
-          });
-        }
-      }
+      const unavailable = detectUnavailableTrack(item, index);
+      if (unavailable) unavailableTracks.push(unavailable);
       index++;
     }
 
@@ -108,8 +90,9 @@ export async function removeUnavailableTracks(
   const spotifyApi = createSpotifyApi(accessToken);
   const positionsSet = new Set(positions);
 
-  // Tüm mevcut track'leri al
-  const allTracks: string[] = [];
+  // Single pass: collect tracks to keep AND unique URIs to remove
+  const tracksToKeep: string[] = [];
+  const uniqueCurrentUris = new Set<string>();
   let offset = 0;
   const limit = 100;
 
@@ -120,26 +103,14 @@ export async function removeUnavailableTracks(
 
     data.body.items.forEach((item: any, idx: number) => {
       const globalIndex = offset + idx;
-      // Sadece unavailable olmayan ve geçerli URI'ye sahip track'leri ekle
-      if (!positionsSet.has(globalIndex) && item.track?.uri && !item.track.is_local) {
-        allTracks.push(item.track.uri);
+      if (item.track?.uri) {
+        uniqueCurrentUris.add(item.track.uri);
+        if (!positionsSet.has(globalIndex) && !item.track.is_local) {
+          tracksToKeep.push(item.track.uri);
+        }
       }
     });
 
-    if (data.body.items.length < limit) break;
-    offset += limit;
-  }
-
-  // Mevcut tüm unique URI'leri bul (silmek için)
-  const uniqueCurrentUris = new Set<string>();
-  offset = 0;
-  while (true) {
-    const data = await rateLimiter.execute(() =>
-      spotifyApi.getPlaylistTracks(playlistId, { offset, limit, fields: 'items(track(uri))' })
-    );
-    data.body.items.forEach((item: any) => {
-      if (item.track?.uri) uniqueCurrentUris.add(item.track.uri);
-    });
     if (data.body.items.length < limit) break;
     offset += limit;
   }
@@ -154,8 +125,8 @@ export async function removeUnavailableTracks(
   }
 
   // Kalması gereken şarkıları ekle
-  for (let i = 0; i < allTracks.length; i += 100) {
-    const batch = allTracks.slice(i, i + 100);
+  for (let i = 0; i < tracksToKeep.length; i += 100) {
+    const batch = tracksToKeep.slice(i, i + 100);
     await rateLimiter.execute(() =>
       spotifyApi.addTracksToPlaylist(playlistId, batch)
     );

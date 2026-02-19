@@ -10,75 +10,12 @@ export function usePlaylists() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    async function fetchPlaylists() {
-      if (!session) return;
-      
-      setIsLoading(true);
-      setError(null);
-      
-      try {
-        const data = await api.getPlaylists(session);
-        // getUserPlaylists'ten gelen playlist'leri işaretle
-        const playlistsWithFlag = data.items.map(p => ({
-          ...p,
-          _isFromUserLibrary: true
-        }));
-        setPlaylists(playlistsWithFlag);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to fetch playlists');
-      } finally {
-        setIsLoading(false);
-      }
-    }
-
-    fetchPlaylists();
-  }, [session]);
-
-  const addPlaylist = (playlist: SpotifyPlaylist) => {
-    setPlaylists(prev => {
-      // Zaten varsa ekleme
-      if (prev.some(p => p.id === playlist.id)) return prev;
-      // Link ile eklenen playlist'ler _isFromUserLibrary: false
-      return [{ ...playlist, _isFromUserLibrary: false }, ...prev];
-    });
-  };
-
-  const toggleCollaboratorMark = (playlistId: string) => {
-    setPlaylists(prev => prev.map(p => {
-      if (p.id === playlistId) {
-        return { ...p, _markedAsCollaborator: !p._markedAsCollaborator };
-      }
-      return p;
-    }));
-  };
-
-  // Seçilen playlist için detaylı bilgi al (followers vs.)
-  const fetchPlaylistDetails = useCallback(async (playlistId: string) => {
-    if (!session) return;
-    
-    try {
-      const details = await api.getPlaylist(session, playlistId);
-      setPlaylists(prev => prev.map(p => {
-        if (p.id === playlistId) {
-          return { 
-            ...p, 
-            followers: details.followers,
-            description: details.description || p.description,
-            public: details.public
-          };
-        }
-        return p;
-      }));
-    } catch (err) {
-      console.error('Failed to fetch playlist details:', err);
-    }
-  }, [session]);
-
-  const refetchPlaylists = async () => {
+  const fetchPlaylists = useCallback(async () => {
     if (!session) return;
     
     setIsLoading(true);
+    setError(null);
+    
     try {
       const data = await api.getPlaylists(session);
       const playlistsWithFlag = data.items.map(p => ({
@@ -91,9 +28,41 @@ export function usePlaylists() {
     } finally {
       setIsLoading(false);
     }
+  }, [session]);
+
+  useEffect(() => {
+    fetchPlaylists();
+  }, [fetchPlaylists]);
+
+  const addPlaylist = (playlist: SpotifyPlaylist) => {
+    setPlaylists(prev => {
+      if (prev.some(p => p.id === playlist.id)) return prev;
+      return [{ ...playlist, _isFromUserLibrary: false }, ...prev];
+    });
   };
 
-  return { playlists, isLoading, error, addPlaylist, refetchPlaylists, toggleCollaboratorMark, fetchPlaylistDetails };
+  const toggleCollaboratorMark = (playlistId: string) => {
+    setPlaylists(prev => prev.map(p =>
+      p.id === playlistId ? { ...p, _markedAsCollaborator: !p._markedAsCollaborator } : p
+    ));
+  };
+
+  const fetchPlaylistDetails = useCallback(async (playlistId: string) => {
+    if (!session) return;
+    
+    try {
+      const details = await api.getPlaylist(session, playlistId);
+      setPlaylists(prev => prev.map(p =>
+        p.id === playlistId
+          ? { ...p, followers: details.followers, description: details.description || p.description, public: details.public }
+          : p
+      ));
+    } catch (err) {
+      console.error('Failed to fetch playlist details:', err);
+    }
+  }, [session]);
+
+  return { playlists, isLoading, error, addPlaylist, refetchPlaylists: fetchPlaylists, toggleCollaboratorMark, fetchPlaylistDetails };
 }
 
 interface LoadingState {
@@ -291,31 +260,31 @@ export function sortTracks(tracks: TrackWithGenres[], config: SortConfig): Track
   return sorted;
 }
 
-export function groupTracksByGenre(tracks: TrackWithGenres[]): Map<string, TrackWithGenres[]> {
+export function groupTracksBy(
+  tracks: TrackWithGenres[],
+  keyFn: (track: TrackWithGenres) => string | null
+): Map<string, TrackWithGenres[]> {
   const groups = new Map<string, TrackWithGenres[]>();
   
-  tracks.forEach(track => {
-    const genre = track.genres[0] || 'Unknown';
-    if (!groups.has(genre)) {
-      groups.set(genre, []);
+  for (const track of tracks) {
+    const key = keyFn(track);
+    if (key === null) continue;
+    
+    const group = groups.get(key);
+    if (group) {
+      group.push(track);
+    } else {
+      groups.set(key, [track]);
     }
-    groups.get(genre)!.push(track);
-  });
+  }
   
   return groups;
 }
 
+export function groupTracksByGenre(tracks: TrackWithGenres[]): Map<string, TrackWithGenres[]> {
+  return groupTracksBy(tracks, t => t.genres[0] || 'Unknown');
+}
+
 export function groupTracksByAlbum(tracks: TrackWithGenres[]): Map<string, TrackWithGenres[]> {
-  const groups = new Map<string, TrackWithGenres[]>();
-  
-  tracks.forEach(track => {
-    if (!track.track) return;
-    const album = track.track.album.name;
-    if (!groups.has(album)) {
-      groups.set(album, []);
-    }
-    groups.get(album)!.push(track);
-  });
-  
-  return groups;
+  return groupTracksBy(tracks, t => t.track?.album.name ?? null);
 }

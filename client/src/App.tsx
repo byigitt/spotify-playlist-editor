@@ -7,7 +7,20 @@ import { TrackList } from './components/TrackList';
 import { ActionPanel } from './components/ActionPanel';
 import { usePlaylists, usePlaylistTracks, sortTracks } from './hooks/usePlaylists';
 import { SortConfig, TrackWithGenres } from './types/spotify';
+import { canEditPlaylist, isPlaylistCollaborator } from './utils/playlist';
 import './App.css';
+
+const SORT_LABELS: Record<string, string> = {
+  'custom': 'Playlist Sırası',
+  'added_at': 'Eklenme Tarihi',
+  'name': 'Şarkı Adı',
+  'artist': 'Sanatçı',
+  'album': 'Albüm',
+  'genre': 'Genre',
+  'release_date': 'Yayın Tarihi',
+  'popularity': 'Popülerlik',
+  'random': 'Rastgele'
+};
 
 function Dashboard() {
   const { user } = useAuth();
@@ -51,48 +64,29 @@ function Dashboard() {
     [playlists, selectedPlaylistId]
   );
 
-  const canEditPlaylist = useMemo(() => {
-    if (!user || !selectedPlaylist) return false;
-    const isOwner = selectedPlaylist.owner?.id === user.id;
-    const isCollaborative = selectedPlaylist.collaborative === true;
-    const isManuallyMarkedAsCollaborator = selectedPlaylist._markedAsCollaborator === true;
-    
-    // Mantık:
-    // 1. Owner isen -> edit edebilirsin
-    // 2. collaborative: true ise -> Spotify API diyor ki collaborator'sın
-    // 3. Kullanıcı manuel olarak "ben collaborator'ım" dediyse -> edit edebilirsin
-    return isOwner || isCollaborative || isManuallyMarkedAsCollaborator;
-  }, [user, selectedPlaylist]);
+  const canEdit = useMemo(
+    () => canEditPlaylist(user?.id ?? null, selectedPlaylist),
+    [user, selectedPlaylist]
+  );
 
-  const isCollaborator = useMemo(() => {
-    if (!user || !selectedPlaylist) return false;
-    const isOwner = selectedPlaylist.owner?.id === user.id;
-    const isCollaborative = selectedPlaylist.collaborative === true;
-    const isManuallyMarkedAsCollaborator = selectedPlaylist._markedAsCollaborator === true;
-    // Owner değilsin ama collaborator'sın (API veya manuel)
-    return !isOwner && (isCollaborative || isManuallyMarkedAsCollaborator);
-  }, [user, selectedPlaylist]);
+  const isCollaborator = useMemo(
+    () => isPlaylistCollaborator(user?.id ?? null, selectedPlaylist),
+    [user, selectedPlaylist]
+  );
 
   const sortedTracks = useMemo(
     () => manualTracks || sortTracks(tracks, sortConfig),
     [tracks, sortConfig, manualTracks]
   );
 
-  const sortLabels: Record<string, string> = {
-    'custom': 'Playlist Sırası',
-    'added_at': 'Eklenme Tarihi',
-    'name': 'Şarkı Adı',
-    'artist': 'Sanatçı',
-    'album': 'Albüm',
-    'genre': 'Genre',
-    'release_date': 'Yayın Tarihi',
-    'popularity': 'Popülerlik',
-    'random': 'Rastgele'
-  };
-
-  const currentSortLabel = manualTracks 
-    ? (sortConfig.option === 'random' ? 'Rastgele sıralama' : 'Manuel sıralama')
-    : `${sortLabels[sortConfig.option]}${(sortConfig.option !== 'random' && sortConfig.option !== 'custom') ? ` (${sortConfig.direction === 'asc' ? '↑' : '↓'})` : ''}`;
+  const currentSortLabel = useMemo(() => {
+    if (manualTracks) {
+      return sortConfig.option === 'random' ? 'Rastgele sıralama' : 'Manuel sıralama';
+    }
+    const label = SORT_LABELS[sortConfig.option];
+    const showDirection = sortConfig.option !== 'random' && sortConfig.option !== 'custom';
+    return showDirection ? `${label} (${sortConfig.direction === 'asc' ? '↑' : '↓'})` : label;
+  }, [manualTracks, sortConfig]);
 
   // Drag & drop ile sıralama değişti
   const handleTracksReorder = (newTracks: TrackWithGenres[]) => {
@@ -112,13 +106,17 @@ function Dashboard() {
     setHasChanges(true);
   };
 
-  const handleShuffle = () => {
-    const shuffled = [...tracks];
+  const shuffleArray = (arr: TrackWithGenres[]): TrackWithGenres[] => {
+    const shuffled = [...arr];
     for (let i = shuffled.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
     }
-    setManualTracks(shuffled);
+    return shuffled;
+  };
+
+  const handleShuffle = () => {
+    setManualTracks(shuffleArray(tracks));
     setSortConfig({ option: 'random', direction: 'asc' });
     setHasChanges(true);
   };
@@ -227,7 +225,7 @@ function Dashboard() {
           onSortByGenre={handleSortByGenre}
           onSortByAlbum={handleSortByAlbum}
           onShuffle={handleShuffle}
-          canEdit={canEditPlaylist}
+          canEdit={canEdit}
           isCollaborator={isCollaborator}
           currentSort={currentSortLabel}
           hasManualChanges={hasChanges}
@@ -239,14 +237,8 @@ function Dashboard() {
           tracks={sortedTracks}
           sortConfig={sortConfig}
           onSortChange={(config) => {
-            // Random için yeniden karıştırma: shuffle yapıp manualTracks'a kaydet
             if (config.option === 'random') {
-              const shuffled = [...tracks];
-              for (let i = shuffled.length - 1; i > 0; i--) {
-                const j = Math.floor(Math.random() * (i + 1));
-                [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-              }
-              setManualTracks(shuffled);
+              setManualTracks(shuffleArray(tracks));
               setSortConfig(config);
               if (initialSortApplied) {
                 setHasChanges(true);

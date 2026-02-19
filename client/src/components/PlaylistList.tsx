@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { ListMusic, Music, Loader2, Search, Link, Lock, Users, RefreshCw } from 'lucide-react';
 import { SpotifyPlaylist } from '../types/spotify';
 import { useAuth } from '../context/AuthContext';
+import { canEditPlaylist, isPlaylistCollaborator } from '../utils/playlist';
 
 interface PlaylistListProps {
   playlists: SpotifyPlaylist[];
@@ -26,19 +27,8 @@ export function PlaylistList({ playlists, selectedId, onSelect, isLoading, userI
     playlist.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const canEdit = (playlist: SpotifyPlaylist) => {
-    const isOwner = userId && playlist.owner.id === userId;
-    const isCollaborative = playlist.collaborative === true;
-    const isManuallyMarked = playlist._markedAsCollaborator === true;
-    return isOwner || isCollaborative || isManuallyMarked;
-  };
-
-  const isCollaborator = (playlist: SpotifyPlaylist) => {
-    const isOwner = userId && playlist.owner.id === userId;
-    const isCollaborative = playlist.collaborative === true;
-    const isManuallyMarked = playlist._markedAsCollaborator === true;
-    return !isOwner && (isCollaborative || isManuallyMarked);
-  };
+  const canEdit = (playlist: SpotifyPlaylist) => canEditPlaylist(userId, playlist);
+  const isCollaborator = (playlist: SpotifyPlaylist) => isPlaylistCollaborator(userId, playlist);
 
   const extractPlaylistId = (url: string): string | null => {
     // Spotify playlist URL formatları:

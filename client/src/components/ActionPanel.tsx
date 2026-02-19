@@ -613,36 +613,36 @@ export function ActionPanel({ tracks, selectedPlaylist, onSuccess, onSortByGenre
     }
   };
 
-  const handleCreatePlaylist = async () => {
-    if (!session || !newPlaylistName || tracks.length === 0) return;
+  const getUniqueTrackUris = (): string[] => {
+    const seen = new Set<string>();
+    return tracks
+      .filter(t => {
+        if (!t.track) return false;
+        if (seen.has(t.track.uri)) return false;
+        seen.add(t.track.uri);
+        return true;
+      })
+      .map(t => t.track!.uri);
+  };
+
+  const createPlaylistWithTracks = async (
+    name: string,
+    description: string,
+    successMessage: string,
+    onDone: () => void
+  ) => {
+    if (!session || tracks.length === 0) return;
     
     setIsWorking(true);
     setMessage(null);
     
     try {
-      // Duplicate'leri filtrele
-      const seen = new Set<string>();
-      const uris = tracks
-        .filter(t => {
-          if (!t.track) return false;
-          if (seen.has(t.track.uri)) return false;
-          seen.add(t.track.uri);
-          return true;
-        })
-        .map(t => t.track!.uri);
-      
-      const playlist = await api.createPlaylist(
-        session, 
-        newPlaylistName,
-        `${selectedPlaylist?.name || 'Playlist'} - Düzenlenmiş`,
-        false
-      );
-      
+      const uris = getUniqueTrackUris();
+      const playlist = await api.createPlaylist(session, name, description, false);
       await api.addTracksToPlaylist(session, playlist.id, uris);
       
-      setMessage({ type: 'success', text: `"${newPlaylistName}" oluşturuldu! (${uris.length} şarkı)` });
-      setShowCreateModal(false);
-      setNewPlaylistName('');
+      setMessage({ type: 'success', text: `${successMessage} (${uris.length} şarkı)` });
+      onDone();
       onSuccess();
     } catch (error) {
       setMessage({ 
@@ -654,45 +654,24 @@ export function ActionPanel({ tracks, selectedPlaylist, onSuccess, onSortByGenre
     }
   };
 
-  const handleCopyPlaylist = async () => {
-    if (!session || !copyPlaylistName || tracks.length === 0) return;
-    
-    setIsWorking(true);
-    setMessage(null);
-    
-    try {
-      // Duplicate'leri filtrele
-      const seen = new Set<string>();
-      const uris = tracks
-        .filter(t => {
-          if (!t.track) return false;
-          if (seen.has(t.track.uri)) return false;
-          seen.add(t.track.uri);
-          return true;
-        })
-        .map(t => t.track!.uri);
-      
-      const playlist = await api.createPlaylist(
-        session, 
-        copyPlaylistName,
-        `${selectedPlaylist?.name || 'Playlist'} kopyası`,
-        false
-      );
-      
-      await api.addTracksToPlaylist(session, playlist.id, uris);
-      
-      setMessage({ type: 'success', text: `"${copyPlaylistName}" olarak kopyalandı! (${uris.length} şarkı)` });
-      setShowCopyModal(false);
-      setCopyPlaylistName('');
-      onSuccess();
-    } catch (error) {
-      setMessage({ 
-        type: 'error', 
-        text: error instanceof Error ? error.message : 'Bir hata oluştu'
-      });
-    } finally {
-      setIsWorking(false);
-    }
+  const handleCreatePlaylist = () => {
+    if (!newPlaylistName) return;
+    createPlaylistWithTracks(
+      newPlaylistName,
+      `${selectedPlaylist?.name || 'Playlist'} - Düzenlenmiş`,
+      `"${newPlaylistName}" oluşturuldu!`,
+      () => { setShowCreateModal(false); setNewPlaylistName(''); }
+    );
+  };
+
+  const handleCopyPlaylist = () => {
+    if (!copyPlaylistName) return;
+    createPlaylistWithTracks(
+      copyPlaylistName,
+      `${selectedPlaylist?.name || 'Playlist'} kopyası`,
+      `"${copyPlaylistName}" olarak kopyalandı!`,
+      () => { setShowCopyModal(false); setCopyPlaylistName(''); }
+    );
   };
 
   if (!selectedPlaylist || tracks.length === 0) {

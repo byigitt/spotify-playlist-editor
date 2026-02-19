@@ -2,13 +2,8 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
-// Dev modunda rate limit'i devre dışı bırak
-// .env'de DEV_MODE=true ekleyerek aktif edebilirsin
 const isDev = process.env.DEV_MODE === 'true' || process.env.NODE_ENV === 'development';
-
-if (isDev) {
-  console.log('⚡ Dev mode: Rate limiting disabled');
-}
+if (isDev) console.log('⚡ Dev mode: Rate limiting disabled');
 
 interface QueuedRequest {
   fn: () => Promise<any>;

@@ -45,153 +45,108 @@ async function fetchApi<T>(endpoint: string, options?: RequestInit & { session?:
   return response.json();
 }
 
+// Response types used by multiple endpoints
+interface ReorderPreviewResponse {
+  removed: number;
+  added: number;
+  reordered: number;
+  estimatedApiCalls: number;
+  estimatedTimeMs: number;
+  estimatedTimeFormatted: string;
+  recommendFastMode: boolean;
+}
+
+interface ReorderResponse {
+  success: boolean;
+  async?: boolean;
+  jobId?: string;
+  estimatedTime?: string;
+  mode?: string;
+}
+
+interface JobStatusResponse {
+  id: string;
+  status: 'pending' | 'running' | 'completed' | 'failed';
+  progress: number;
+  message: string;
+  result?: any;
+  error?: string;
+}
+
+interface ExtractGenresResponse {
+  success: boolean;
+  extractedCount: number;
+  remainingCount: number;
+  newPlaylistId: string | null;
+  newPlaylistName: string | null;
+  copied: boolean;
+  removed: boolean;
+}
+
+/** Helper for POST/PUT/DELETE with JSON body */
+function sessionPost<T>(endpoint: string, session: string, body: object, method = 'POST'): Promise<T> {
+  return fetchApi<T>(endpoint, { method, session, body: JSON.stringify(body) });
+}
+
 export const api = {
   // Auth
   getLoginUrl: () => fetchApi<{ url: string }>('/auth/login'),
-  
-  logout: (session: string) => 
-    fetchApi<{ success: boolean }>('/auth/logout', { 
-      method: 'POST', 
-      session 
-    }),
+  logout: (session: string) => sessionPost<{ success: boolean }>('/auth/logout', session, {}),
 
   // User
-  getMe: (session: string) => 
-    fetchApi<SpotifyUser>('/me', { session }),
+  getMe: (session: string) => fetchApi<SpotifyUser>('/me', { session }),
 
   // Playlists
-  getPlaylists: (session: string) => 
-    fetchApi<{ items: SpotifyPlaylist[] }>('/playlists', { session }),
+  getPlaylists: (session: string) => fetchApi<{ items: SpotifyPlaylist[] }>('/playlists', { session }),
+  getPlaylist: (session: string, playlistId: string) => fetchApi<SpotifyPlaylist>(`/playlists/${playlistId}`, { session }),
 
-  getPlaylist: (session: string, playlistId: string) =>
-    fetchApi<SpotifyPlaylist>(`/playlists/${playlistId}`, { session }),
+  getPlaylistTracks: (session: string, playlistId: string) =>
+    fetchApi<{ items: PlaylistTrackItem[]; total: number }>(`/playlists/${playlistId}/tracks`, { session }),
 
-  getPlaylistTracks: (session: string, playlistId: string) => 
-    fetchApi<{ items: PlaylistTrackItem[]; total: number }>(
-      `/playlists/${playlistId}/tracks`, 
-      { session }
-    ),
-
-  // Sadece track ID'lerini al (hızlı)
   getPlaylistTrackIds: (session: string, playlistId: string) =>
-    fetchApi<{ items: { id: string; uri: string; added_at: string }[]; total: number }>(
-      `/playlists/${playlistId}/track-ids`,
-      { session }
-    ),
+    fetchApi<{ items: { id: string; uri: string; added_at: string }[]; total: number }>(`/playlists/${playlistId}/track-ids`, { session }),
 
-  // Birden fazla track detayı al
+  // Tracks & Artists
   getTracks: (session: string, ids: string[]) =>
-    fetchApi<{ tracks: SpotifyTrack[] }>('/tracks', {
-      method: 'POST',
-      session,
-      body: JSON.stringify({ ids }),
-    }),
+    sessionPost<{ tracks: SpotifyTrack[] }>('/tracks', session, { ids }),
 
-  // Artist Genres
-  getArtistGenres: (session: string, artistIds: string[]) => 
-    fetchApi<Record<string, string[]>>('/artists/genres', {
-      method: 'POST',
-      session,
-      body: JSON.stringify({ artistIds }),
-    }),
+  getArtistGenres: (session: string, artistIds: string[]) =>
+    sessionPost<Record<string, string[]>>('/artists/genres', session, { artistIds }),
 
-  // Create Playlist
+  // Playlist mutations
   createPlaylist: (session: string, name: string, description?: string, isPublic?: boolean) =>
-    fetchApi<SpotifyPlaylist>('/playlists', {
-      method: 'POST',
-      session,
-      body: JSON.stringify({ name, description, isPublic }),
-    }),
+    sessionPost<SpotifyPlaylist>('/playlists', session, { name, description, isPublic }),
 
-  // Add Tracks to Playlist
   addTracksToPlaylist: (session: string, playlistId: string, uris: string[]) =>
-    fetchApi<{ success: boolean }>(`/playlists/${playlistId}/tracks`, {
-      method: 'POST',
-      session,
-      body: JSON.stringify({ uris }),
-    }),
+    sessionPost<{ success: boolean }>(`/playlists/${playlistId}/tracks`, session, { uris }),
 
-  // Preview Reorder (get estimated time)
   previewReorder: (session: string, playlistId: string, uris: string[]) =>
-    fetchApi<{
-      removed: number;
-      added: number;
-      reordered: number;
-      estimatedApiCalls: number;
-      estimatedTimeMs: number;
-      estimatedTimeFormatted: string;
-      recommendFastMode: boolean;
-    }>(`/playlists/${playlistId}/reorder/preview`, {
-      method: 'POST',
-      session,
-      body: JSON.stringify({ uris }),
-    }),
+    sessionPost<ReorderPreviewResponse>(`/playlists/${playlistId}/reorder/preview`, session, { uris }),
 
-  // Reorder Playlist
   reorderPlaylist: (session: string, playlistId: string, uris: string[], fastMode = false) =>
-    fetchApi<{ 
-      success: boolean; 
-      async?: boolean; 
-      jobId?: string;
-      estimatedTime?: string;
-      mode?: string;
-    }>(`/playlists/${playlistId}/tracks`, {
-      method: 'PUT',
-      session,
-      body: JSON.stringify({ uris, fastMode }),
-    }),
+    sessionPost<ReorderResponse>(`/playlists/${playlistId}/tracks`, session, { uris, fastMode }, 'PUT'),
 
-  // Get job status
-  getJobStatus: (jobId: string) =>
-    fetchApi<{
-      id: string;
-      status: 'pending' | 'running' | 'completed' | 'failed';
-      progress: number;
-      message: string;
-      result?: any;
-      error?: string;
-    }>(`/jobs/${jobId}`),
+  // Jobs
+  getJobStatus: (jobId: string) => fetchApi<JobStatusResponse>(`/jobs/${jobId}`),
 
-  // Get Unavailable Tracks (deleted, region-locked, local files)
+  // Unavailable tracks
   getUnavailableTracks: (session: string, playlistId: string) =>
-    fetchApi<{
-      unavailable: UnavailableTrack[];
-      total: number;
-      market: string;
-    }>(`/playlists/${playlistId}/unavailable`, { session }),
+    fetchApi<{ unavailable: UnavailableTrack[]; total: number; market: string }>(`/playlists/${playlistId}/unavailable`, { session }),
 
-  // Remove Unavailable Tracks
   removeUnavailableTracks: (session: string, playlistId: string, positions: number[]) =>
-    fetchApi<{ success: boolean; removed: number }>(`/playlists/${playlistId}/unavailable`, {
-      method: 'DELETE',
-      session,
-      body: JSON.stringify({ positions }),
-    }),
+    sessionPost<{ success: boolean; removed: number }>(`/playlists/${playlistId}/unavailable`, session, { positions }, 'DELETE'),
 
-  // Extract genres from playlist
+  // Genre extraction
   extractGenres: (
-    session: string, 
-    playlistId: string, 
-    genres: string[], 
+    session: string,
+    playlistId: string,
+    genres: string[],
     newPlaylistName: string,
     options: { copyToNew: boolean; removeFromOriginal: boolean }
   ) =>
-    fetchApi<{
-      success: boolean;
-      extractedCount: number;
-      remainingCount: number;
-      newPlaylistId: string | null;
-      newPlaylistName: string | null;
-      copied: boolean;
-      removed: boolean;
-    }>(`/playlists/${playlistId}/extract-genres`, {
-      method: 'POST',
-      session,
-      body: JSON.stringify({ 
-        genres, 
-        newPlaylistName,
-        copyToNew: options.copyToNew,
-        removeFromOriginal: options.removeFromOriginal
-      }),
+    sessionPost<ExtractGenresResponse>(`/playlists/${playlistId}/extract-genres`, session, {
+      genres,
+      newPlaylistName,
+      ...options
     }),
 };

@@ -136,31 +136,26 @@ export function TrackList({
   }
 
   // Gruplama
-  let groupedTracks: Map<string, TrackWithGenres[]> | null = null;
-  if (groupBy === 'genre') {
-    groupedTracks = new Map();
-    tracks.forEach(t => {
-      const key = t.genres[0] || 'Bilinmeyen';
-      if (!groupedTracks!.has(key)) groupedTracks!.set(key, []);
-      groupedTracks!.get(key)!.push(t);
-    });
-  } else if (groupBy === 'album') {
-    groupedTracks = new Map();
-    tracks.forEach(t => {
-      const key = t.track?.album.name || 'Bilinmeyen';
-      if (!groupedTracks!.has(key)) groupedTracks!.set(key, []);
-      groupedTracks!.get(key)!.push(t);
-    });
-  }
+  const groupedTracks: Map<string, TrackWithGenres[]> | null = (() => {
+    if (groupBy === 'none') return null;
+    
+    const groups = new Map<string, TrackWithGenres[]>();
+    for (const t of tracks) {
+      const key = groupBy === 'genre'
+        ? (t.genres[0] || 'Bilinmeyen')
+        : (t.track?.album.name || 'Bilinmeyen');
+      const group = groups.get(key);
+      if (group) { group.push(t); } else { groups.set(key, [t]); }
+    }
+    return groups;
+  })();
 
-  // Grupları sırala - Bilinmeyen en sona
-  const sortGroups = (entries: [string, TrackWithGenres[]][]) => {
-    return entries.sort(([a], [b]) => {
+  const sortGroups = (entries: [string, TrackWithGenres[]][]) =>
+    entries.sort(([a], [b]) => {
       if (a === 'Bilinmeyen') return 1;
       if (b === 'Bilinmeyen') return -1;
       return a.localeCompare(b);
     });
-  };
 
   return (
     <div className="track-list">

@@ -8,83 +8,66 @@ export interface TrackId {
   added_at: string;
 }
 
-export async function getPlaylistTrackIds(accessToken: string, playlistId: string): Promise<TrackId[]> {
-  const spotifyApi = createSpotifyApi(accessToken);
-  const trackIds: TrackId[] = [];
+const PAGE_LIMIT = 100;
+
+/**
+ * Paginate through all playlist tracks, collecting results via a mapper function.
+ */
+async function paginatePlaylistTracks<T>(
+  spotifyApi: SpotifyWebApi,
+  playlistId: string,
+  options: Record<string, any>,
+  mapper: (items: any[]) => T[]
+): Promise<T[]> {
+  const results: T[] = [];
   let offset = 0;
-  const limit = 100;
 
   while (true) {
     const data = await rateLimiter.execute(() =>
-      spotifyApi.getPlaylistTracks(playlistId, {
-        offset,
-        limit,
-        fields: 'items(added_at,track(id,uri)),total'
-      })
+      spotifyApi.getPlaylistTracks(playlistId, { offset, limit: PAGE_LIMIT, ...options })
     );
-
-    data.body.items.forEach((item: any) => {
-      if (item.track?.id) {
-        trackIds.push({
-          id: item.track.id,
-          uri: item.track.uri,
-          added_at: item.added_at
-        });
-      }
-    });
-
-    if (data.body.items.length < limit) break;
-    offset += limit;
+    results.push(...mapper(data.body.items));
+    if (data.body.items.length < PAGE_LIMIT) break;
+    offset += PAGE_LIMIT;
   }
 
-  return trackIds;
+  return results;
+}
+
+export async function getPlaylistTrackIds(accessToken: string, playlistId: string): Promise<TrackId[]> {
+  const spotifyApi = createSpotifyApi(accessToken);
+  return paginatePlaylistTracks(spotifyApi, playlistId, {
+    fields: 'items(added_at,track(id,uri)),total'
+  }, (items) =>
+    items
+      .filter((item: any) => item.track?.id)
+      .map((item: any) => ({
+        id: item.track.id,
+        uri: item.track.uri,
+        added_at: item.added_at
+      }))
+  );
 }
 
 export async function getPlaylistTracks(accessToken: string, playlistId: string) {
   const spotifyApi = createSpotifyApi(accessToken);
-  const allTracks: any[] = [];
-  let offset = 0;
-  const limit = 100;
-
-  while (true) {
-    const data = await rateLimiter.execute(() =>
-      spotifyApi.getPlaylistTracks(playlistId, { offset, limit })
-    );
-    allTracks.push(...data.body.items);
-    if (data.body.items.length < limit) break;
-    offset += limit;
-  }
-
-  return allTracks;
+  return paginatePlaylistTracks(spotifyApi, playlistId, {}, (items) => items);
 }
 
 export async function getPlaylistUris(accessToken: string, playlistId: string): Promise<string[]> {
   const spotifyApi = createSpotifyApi(accessToken);
-  const uris: string[] = [];
-  let offset = 0;
-  const limit = 100;
-
-  while (true) {
-    const data = await rateLimiter.execute(() =>
-      spotifyApi.getPlaylistTracks(playlistId, { offset, limit })
-    );
-    const batch = data.body.items
+  return paginatePlaylistTracks(spotifyApi, playlistId, {}, (items) =>
+    items
       .map((item: SpotifyApi.PlaylistTrackObject) => item.track?.uri)
-      .filter((uri: string | undefined): uri is string => !!uri);
-    uris.push(...batch);
-    if (data.body.items.length < limit) break;
-    offset += limit;
-  }
-
-  return uris;
+      .filter((uri: string | undefined): uri is string => !!uri)
+  );
 }
 
 export async function addTracksToPlaylist(accessToken: string, playlistId: string, uris: string[]) {
   const spotifyApi = createSpotifyApi(accessToken);
 
-  // Spotify max 100 tracks per request
-  for (let i = 0; i < uris.length; i += 100) {
-    const batch = uris.slice(i, i + 100);
+  for (let i = 0; i < uris.length; i += PAGE_LIMIT) {
+    const batch = uris.slice(i, i + PAGE_LIMIT);
     await rateLimiter.execute(() =>
       spotifyApi.addTracksToPlaylist(playlistId, batch)
     );

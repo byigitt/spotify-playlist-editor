@@ -72,9 +72,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     window.location.href = url;
   };
 
-  const logout = async () => {
+  const logout = () => {
     if (session) {
-      await api.logout(session);
+      api.logout(session).catch(console.error);
     }
     localStorage.removeItem('spotify_session');
     setSession(null);

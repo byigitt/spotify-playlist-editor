@@ -2,7 +2,7 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
-const isDev = process.env.DEV_MODE === 'true' || process.env.NODE_ENV === 'development';
+const isDev = process.env.DEV_MODE === 'true';
 if (isDev) console.log('⚡ Dev mode: Rate limiting disabled');
 
 interface QueuedRequest {

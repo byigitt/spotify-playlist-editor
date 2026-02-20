@@ -20,8 +20,13 @@ router.get("/login", (req, res) => {
 
 router.get("/callback", async (req, res) => {
   const { code } = req.query;
+  // Production'da client aynı origin'den sunuluyor, CLIENT_URL gerekmez
+  const clientUrl = process.env.NODE_ENV === "production"
+    ? ""
+    : (process.env.CLIENT_URL || "http://localhost:5173");
+
   if (!code || typeof code !== "string") {
-    return res.redirect(`${process.env.CLIENT_URL}?error=no_code`);
+    return res.redirect(`${clientUrl}?error=no_code`);
   }
 
   try {
@@ -37,10 +42,10 @@ router.get("/callback", async (req, res) => {
       expiresAt: Date.now() + expires_in * 1000,
     });
 
-    res.redirect(`${process.env.CLIENT_URL}?session=${sessionId}`);
+    res.redirect(`${clientUrl}?session=${sessionId}`);
   } catch (error) {
     console.error("Auth error:", error);
-    res.redirect(`${process.env.CLIENT_URL}?error=auth_failed`);
+    res.redirect(`${clientUrl}?error=auth_failed`);
   }
 });
 

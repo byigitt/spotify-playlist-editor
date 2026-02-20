@@ -17,7 +17,10 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 const HOST = process.env.HOST || "0.0.0.0";
 
-app.use(cors({ origin: process.env.CLIENT_URL || "http://localhost:5173", credentials: true }));
+const corsOrigin = process.env.NODE_ENV === "production"
+  ? true // same-origin in production (server serves client)
+  : (process.env.CLIENT_URL || "http://localhost:5173");
+app.use(cors({ origin: corsOrigin, credentials: true }));
 app.use(express.json());
 
 // Mount API routes
@@ -30,7 +33,10 @@ app.use("/api/jobs", jobRoutes);
 
 // Production: serve client static files
 if (process.env.NODE_ENV === "production") {
-  const clientDist = path.resolve(import.meta.dir, "../../client-dist");
+  // Docker WORKDIR = /app, client build is at /app/client-dist
+  const clientDist = path.resolve(process.cwd(), "client-dist");
+  console.log(`📂 Serving static files from: ${clientDist}`);
+
   app.use(express.static(clientDist));
 
   // SPA fallback — non-API routes get index.html

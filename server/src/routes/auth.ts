@@ -20,9 +20,9 @@ router.get("/login", (req, res) => {
 
 router.get("/callback", async (req, res) => {
   const { code } = req.query;
-  // Docker'da client aynı origin'den sunuluyor, CLIENT_URL gerekmez
+  // Docker'da client aynı origin'den sunuluyor, root'a redirect yeterli
   const clientUrl = process.env.DOCKER === "true"
-    ? ""
+    ? "/"
     : (process.env.CLIENT_URL || "http://localhost:5173");
 
   if (!code || typeof code !== "string") {
@@ -42,9 +42,10 @@ router.get("/callback", async (req, res) => {
       expiresAt: Date.now() + expires_in * 1000,
     });
 
+    console.log(`✅ Auth successful, redirecting to ${clientUrl}?session=***`);
     res.redirect(`${clientUrl}?session=${sessionId}`);
   } catch (error) {
-    console.error("Auth error:", error);
+    console.error("❌ Auth error:", error);
     res.redirect(`${clientUrl}?error=auth_failed`);
   }
 });

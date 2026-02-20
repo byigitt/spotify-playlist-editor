@@ -49,4 +49,5 @@ if (process.env.NODE_ENV === "production") {
 
 app.listen(Number(PORT), HOST, () => {
   console.log(`🚀 Server running on http://${HOST}:${PORT}`);
+  console.log(`🔧 NODE_ENV=${process.env.NODE_ENV}, DEV_MODE=${process.env.DEV_MODE}`);
 });

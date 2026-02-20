@@ -41,4 +41,5 @@ ENV PORT=3001
 
 EXPOSE 3001
 
+RUN echo "BUILD_TIME=$(date -u +%Y%m%d_%H%M%S)" > /app/build-info.txt
 CMD ["bun", "server/dist/index.js"]

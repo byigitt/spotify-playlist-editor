@@ -5,11 +5,10 @@ services:
       dockerfile: infra/Dockerfile
     ports:
       - "${PORT:-3001}:3001"
+    env_file:
+      - .env
     environment:
-      - NODE_ENV=production
-      - PORT=3001
+      - NODE_ENV=${NODE_ENV:-production}
+      - PORT=${PORT:-3001}
       - HOST=0.0.0.0
-      - SPOTIFY_CLIENT_ID=${SPOTIFY_CLIENT_ID}
-      - SPOTIFY_CLIENT_SECRET=${SPOTIFY_CLIENT_SECRET}
-      - SPOTIFY_REDIRECT_URI=${SPOTIFY_REDIRECT_URI:-http://localhost:3001/api/auth/callback}
     restart: unless-stopped

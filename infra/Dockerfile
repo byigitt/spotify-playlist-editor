@@ -38,6 +38,7 @@ COPY --from=builder /app/client/dist ./client-dist
 
 ENV NODE_ENV=production
 ENV PORT=3001
+ENV DEV_MODE=false
 
 EXPOSE 3001
 

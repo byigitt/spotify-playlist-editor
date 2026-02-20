@@ -20,8 +20,8 @@ router.get("/login", (req, res) => {
 
 router.get("/callback", async (req, res) => {
   const { code } = req.query;
-  // Production'da client aynı origin'den sunuluyor, CLIENT_URL gerekmez
-  const clientUrl = process.env.NODE_ENV === "production"
+  // Docker'da client aynı origin'den sunuluyor, CLIENT_URL gerekmez
+  const clientUrl = process.env.DOCKER === "true"
     ? ""
     : (process.env.CLIENT_URL || "http://localhost:5173");
 

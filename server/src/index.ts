@@ -17,7 +17,8 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 const HOST = process.env.HOST || "0.0.0.0";
 
-const corsOrigin = process.env.NODE_ENV === "production"
+const isDocker = process.env.DOCKER === "true";
+const corsOrigin = isDocker
   ? true // same-origin in production (server serves client)
   : (process.env.CLIENT_URL || "http://localhost:5173");
 app.use(cors({ origin: corsOrigin, credentials: true }));
@@ -31,8 +32,8 @@ app.use("/api/tracks", trackRoutes);
 app.use("/api/artists", artistRoutes);
 app.use("/api/jobs", jobRoutes);
 
-// Production: serve client static files
-if (process.env.NODE_ENV === "production") {
+// Docker/Production: serve client static files
+if (isDocker) {
   // Docker WORKDIR = /app, client build is at /app/client-dist
   const clientDist = path.resolve(process.cwd(), "client-dist");
   console.log(`📂 Serving static files from: ${clientDist}`);

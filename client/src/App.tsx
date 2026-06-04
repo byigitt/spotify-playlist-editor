@@ -23,7 +23,9 @@ const SORT_LABELS: Record<string, string> = {
   'random': 'Rastgele'
 };
 
-function Dashboard() {
+type ActiveView = 'playlists' | 'followback';
+
+function Dashboard({ activeView }: { activeView: ActiveView }) {
   const { user } = useAuth();
   const { playlists, isLoading: playlistsLoading, addPlaylist, refetchPlaylists, toggleCollaboratorMark, fetchPlaylistDetails } = usePlaylists();
   const [selectedPlaylistId, setSelectedPlaylistId] = useState<string | null>(null);
@@ -151,6 +153,16 @@ function Dashboard() {
     );
   }
 
+  if (activeView === 'followback') {
+    return (
+      <div className="dashboard">
+        <main className="main-content main-content-full">
+          <FollowbackPanel />
+        </main>
+      </div>
+    );
+  }
+
   return (
     <div className="dashboard">
       <aside className="sidebar">
@@ -167,8 +179,6 @@ function Dashboard() {
       </aside>
       
       <main className="main-content">
-        <FollowbackPanel />
-
         {selectedPlaylist && (
           <div className="playlist-header">
             <div className="playlist-cover">
@@ -273,11 +283,13 @@ function Dashboard() {
 }
 
 function App() {
+  const [activeView, setActiveView] = useState<ActiveView>('playlists');
+
   return (
     <AuthProvider>
       <div className="app">
-        <Header />
-        <Dashboard />
+        <Header activeView={activeView} onViewChange={setActiveView} />
+        <Dashboard activeView={activeView} />
       </div>
     </AuthProvider>
   );

@@ -1,7 +1,14 @@
-import { Music2, LogOut, LogIn, Loader2, Github } from 'lucide-react';
+import { ListMusic, LogOut, LogIn, Loader2, Github, Music2, UserMinus } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
-export function Header() {
+type ActiveView = 'playlists' | 'followback';
+
+interface HeaderProps {
+  activeView: ActiveView;
+  onViewChange: (view: ActiveView) => void;
+}
+
+export function Header({ activeView, onViewChange }: HeaderProps) {
   const { user, login, logout, isLoading } = useAuth();
 
   return (
@@ -11,6 +18,26 @@ export function Header() {
           <Music2 size={32} color="#1DB954" />
           <h1>bariscb <span>Playlist Editor</span></h1>
         </div>
+        {user && (
+          <nav className="header-nav" aria-label="Ana gezinme">
+            <button
+              type="button"
+              className={`nav-tab ${activeView === 'playlists' ? 'active' : ''}`}
+              onClick={() => onViewChange('playlists')}
+            >
+              <ListMusic size={17} />
+              <span>Playlistler</span>
+            </button>
+            <button
+              type="button"
+              className={`nav-tab ${activeView === 'followback' ? 'active' : ''}`}
+              onClick={() => onViewChange('followback')}
+            >
+              <UserMinus size={17} />
+              <span>Geri Takip</span>
+            </button>
+          </nav>
+        )}
         
         <div className="header-right">
           <a 

@@ -9,6 +9,17 @@ interface ParsedAccount {
   label: string;
 }
 
+interface AccountListProps {
+  title: string;
+  emptyText: string;
+  accounts: ParsedAccount[];
+  profiles: Record<string, SocialUser>;
+  selectedIds: Set<string>;
+  selectable: boolean;
+  getBadge?: (id: string) => string;
+  onToggleSelection: (id: string) => void;
+}
+
 const SPOTIFY_PROFILE_URL_PATTERN = /open\.spotify\.com\/user\/([^/?#\s]+)/i;
 const SPOTIFY_PROFILE_URI_PATTERN = /spotify:user:([^:\s]+)/i;
 const TRAILING_PUNCTUATION_PATTERN = /[),.;]+$/;
@@ -90,6 +101,62 @@ function messageFromError(error: unknown, fallback: string): string {
   return fallback;
 }
 
+function mergeIds(first: ParsedAccount[], second: ParsedAccount[]): string[] {
+  const ids = new Set<string>();
+  for (const account of first) {
+    ids.add(account.id);
+  }
+  for (const account of second) {
+    ids.add(account.id);
+  }
+  return [...ids];
+}
+
+
+function AccountList({ title, emptyText, accounts, profiles, selectedIds, selectable, getBadge, onToggleSelection }: AccountListProps) {
+  return (
+    <div className="followback-account-list">
+      <div className="followback-account-list-header">
+        <strong>{title}</strong>
+        <span>{accounts.length} kişi</span>
+      </div>
+      {accounts.length > 0 ? (
+        <div className="followback-account-rows">
+          {accounts.map(account => {
+            const profile = profiles[account.id];
+            const displayName = profile?.displayName ?? account.label;
+            const badge = getBadge?.(account.id);
+
+            return (
+              <label className="followback-user compact" key={account.id}>
+                {selectable && (
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.has(account.id)}
+                    onChange={() => onToggleSelection(account.id)}
+                  />
+                )}
+                {profile?.imageUrl ? (
+                  <img src={profile.imageUrl} alt="" className="followback-avatar" />
+                ) : (
+                  <span className="followback-avatar placeholder"><Users size={18} /></span>
+                )}
+                <span className="followback-user-info">
+                  <a href={profile?.externalUrl ?? `https://open.spotify.com/user/${encodeURIComponent(account.id)}`} target="_blank" rel="noopener noreferrer">{displayName}</a>
+                  <small>{account.id}</small>
+                </span>
+                {badge && <span className="followback-badge">{badge}</span>}
+              </label>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="followback-list-empty">{emptyText}</div>
+      )}
+    </div>
+  );
+}
+
 export function FollowbackPanel() {
   const { session } = useAuth();
   const [followingInput, setFollowingInput] = useState('');
@@ -104,6 +171,7 @@ export function FollowbackPanel() {
   const following = useMemo(() => parseAccounts(followingInput), [followingInput]);
   const followers = useMemo(() => parseAccounts(followersInput), [followersInput]);
   const followerIds = useMemo(() => new Set(followers.map(account => account.id)), [followers]);
+  const followingIds = useMemo(() => new Set(following.map(account => account.id)), [following]);
   const notFollowingBack = useMemo(
     () => following.filter(account => !followerIds.has(account.id)),
     [following, followerIds]
@@ -112,36 +180,43 @@ export function FollowbackPanel() {
     () => notFollowingBack.map(account => account.id),
     [notFollowingBack]
   );
-  const allSelected = notFollowingBack.length > 0 && notFollowingBack.every(account => selectedIds.has(account.id));
+  const allNonFollowersSelected = notFollowingBack.length > 0 && notFollowingBack.every(account => selectedIds.has(account.id));
+
+  const selectedFollowingIds = useMemo(
+    () => [...selectedIds].filter(id => followingIds.has(id)),
+    [selectedIds, followingIds]
+  );
 
   const handleAnalyze = async () => {
     setMessage(null);
     setError(null);
+    setSelectedIds(new Set(notFollowingBackIds));
 
-    if (notFollowingBack.length === 0) {
-      setSelectedIds(new Set());
-      setMessage('Geri takip yapmayan kullanıcı bulunamadı.');
+    if (following.length === 0 && followers.length === 0) {
+      setMessage('Takip edilenleri ve takipçileri görmek için listeleri yapıştırın.');
       return;
     }
 
-    setSelectedIds(new Set(notFollowingBackIds));
     if (!session) {
       setError('Spotify oturumu bulunamadı.');
       return;
     }
 
+    const idsToFetch = mergeIds(following, followers);
     setIsAnalyzing(true);
     try {
-      const { users, missing } = await api.getSocialUsers(session, notFollowingBackIds);
-      setProfiles(previous => {
-        const next = { ...previous };
-        for (const user of users) {
-          next[user.id] = user;
-        }
-        return next;
-      });
-      const missingText = missing.length > 0 ? ` ${missing.length} profil Spotify'dan alınamadı.` : '';
-      setMessage(`${notFollowingBack.length} geri takip yapmayan kullanıcı bulundu.${missingText}`);
+      if (idsToFetch.length > 0) {
+        const { users, missing } = await api.getSocialUsers(session, idsToFetch);
+        setProfiles(previous => {
+          const next = { ...previous };
+          for (const user of users) {
+            next[user.id] = user;
+          }
+          return next;
+        });
+        const missingText = missing.length > 0 ? ` ${missing.length} profil Spotify'dan alınamadı.` : '';
+        setMessage(`${following.length} takip edilen, ${followers.length} takipçi, ${notFollowingBack.length} geri takip yapmayan kişi bulundu.${missingText}`);
+      }
     } catch (caughtError) {
       setError(messageFromError(caughtError, 'Profiller alınamadı.'));
     } finally {
@@ -161,8 +236,18 @@ export function FollowbackPanel() {
     });
   };
 
-  const toggleSelectAll = () => {
-    setSelectedIds(allSelected ? new Set() : new Set(notFollowingBackIds));
+  const toggleNonFollowerSelection = () => {
+    setSelectedIds(previous => {
+      const next = new Set(previous);
+      for (const id of notFollowingBackIds) {
+        if (allNonFollowersSelected) {
+          next.delete(id);
+        } else {
+          next.add(id);
+        }
+      }
+      return next;
+    });
   };
 
   const removeUnfollowedFromInput = (removedIds: Set<string>) => {
@@ -176,9 +261,9 @@ export function FollowbackPanel() {
   };
 
   const handleUnfollow = async () => {
-    const ids = notFollowingBackIds.filter(id => selectedIds.has(id));
+    const ids = selectedFollowingIds;
     if (ids.length === 0) {
-      setError('Takipten çıkmak için en az bir kullanıcı seçin.');
+      setError('Takipten çıkmak için takip edilenlerden en az bir kullanıcı seçin.');
       return;
     }
 
@@ -195,7 +280,13 @@ export function FollowbackPanel() {
       const result = await api.unfollowUsers(session, ids);
       const removedIds = new Set(result.ids);
       removeUnfollowedFromInput(removedIds);
-      setSelectedIds(new Set());
+      setSelectedIds(previous => {
+        const next = new Set(previous);
+        for (const id of removedIds) {
+          next.delete(id);
+        }
+        return next;
+      });
       setMessage(`${result.removed} kullanıcı takipten çıkarıldı.`);
     } catch (caughtError) {
       setError(messageFromError(caughtError, 'Kullanıcılar takipten çıkarılamadı.'));
@@ -205,15 +296,15 @@ export function FollowbackPanel() {
   };
 
   return (
-    <section className="followback-panel">
+    <section className="followback-panel followback-panel-page">
       <div className="followback-header">
         <div>
           <h2><Users size={20} /> Geri Takip Kontrolü</h2>
-          <p>Spotify sosyal takipçi listelerini API'den paylaşmadığı için takip ettiklerinizi ve takipçilerinizi profil linki/ID olarak yapıştırın.</p>
+          <p>Takip edilenleri ve takipçileri profil linki ya da kullanıcı ID'si olarak yapıştırın. Listeleri yan yana görün, geri takip yapmayanları seçip hızlıca takipten çıkın.</p>
         </div>
         <button className="btn btn-primary" onClick={handleAnalyze} disabled={isAnalyzing || isUnfollowing}>
           {isAnalyzing ? <Loader2 className="spin" size={18} /> : <Users size={18} />}
-          <span>Analiz Et</span>
+          <span>Listeleri Analiz Et</span>
         </button>
       </div>
 
@@ -226,7 +317,7 @@ export function FollowbackPanel() {
 
       <div className="followback-inputs">
         <label>
-          <span>Takip ettiklerim</span>
+          <span>Takip edilenler</span>
           <textarea
             value={followingInput}
             onChange={event => setFollowingInput(event.target.value)}
@@ -236,7 +327,7 @@ export function FollowbackPanel() {
           <small>{following.length} kullanıcı okundu</small>
         </label>
         <label>
-          <span>Beni takip edenler</span>
+          <span>Takipçiler</span>
           <textarea
             value={followersInput}
             onChange={event => setFollowersInput(event.target.value)}
@@ -247,15 +338,38 @@ export function FollowbackPanel() {
         </label>
       </div>
 
+      <div className="followback-source-lists">
+        <AccountList
+          title="Takip edilenler"
+          emptyText="Takip edilenler listesi boş."
+          accounts={following}
+          profiles={profiles}
+          selectedIds={selectedIds}
+          selectable
+          getBadge={id => followerIds.has(id) ? 'Geri takip ediyor' : 'Geri takip yok'}
+          onToggleSelection={toggleSelection}
+        />
+        <AccountList
+          title="Takipçiler"
+          emptyText="Takipçi listesi boş."
+          accounts={followers}
+          profiles={profiles}
+          selectedIds={selectedIds}
+          selectable={false}
+          getBadge={id => followingIds.has(id) ? 'Karşılıklı' : 'Sadece takipçi'}
+          onToggleSelection={toggleSelection}
+        />
+      </div>
+
       <div className="followback-results-header">
         <strong>{notFollowingBack.length} kişi geri takip yapmıyor</strong>
         <div className="followback-actions">
-          <button className="btn btn-outline" onClick={toggleSelectAll} disabled={notFollowingBack.length === 0 || isUnfollowing}>
-            {allSelected ? 'Seçimi Temizle' : 'Tümünü Seç'}
+          <button className="btn btn-outline" onClick={toggleNonFollowerSelection} disabled={notFollowingBack.length === 0 || isUnfollowing}>
+            {allNonFollowersSelected ? 'Geri Takip Yok Seçimini Temizle' : 'Geri Takip Yapmayanları Seç'}
           </button>
-          <button className="btn btn-danger" onClick={handleUnfollow} disabled={selectedIds.size === 0 || isUnfollowing}>
+          <button className="btn btn-danger" onClick={handleUnfollow} disabled={selectedFollowingIds.length === 0 || isUnfollowing}>
             {isUnfollowing ? <Loader2 className="spin" size={18} /> : <UserMinus size={18} />}
-            <span>Seçilenleri Takipten Çık ({selectedIds.size})</span>
+            <span>Seçilenleri Takipten Çık ({selectedFollowingIds.length})</span>
           </button>
         </div>
       </div>
@@ -265,7 +379,6 @@ export function FollowbackPanel() {
           {notFollowingBack.map(account => {
             const profile = profiles[account.id];
             const displayName = profile?.displayName ?? account.label;
-            const profileUrl = profile?.externalUrl ?? `https://open.spotify.com/user/${encodeURIComponent(account.id)}`;
 
             return (
               <label className="followback-user" key={account.id}>
@@ -281,7 +394,7 @@ export function FollowbackPanel() {
                   <span className="followback-avatar placeholder"><Users size={18} /></span>
                 )}
                 <span className="followback-user-info">
-                  <a href={profileUrl} target="_blank" rel="noopener noreferrer">{displayName}</a>
+                  <a href={profile?.externalUrl ?? `https://open.spotify.com/user/${encodeURIComponent(account.id)}`} target="_blank" rel="noopener noreferrer">{displayName}</a>
                   <small>{account.id}</small>
                 </span>
               </label>
@@ -291,7 +404,7 @@ export function FollowbackPanel() {
       ) : (
         <div className="followback-empty">
           <Users size={32} />
-          <span>Listeleri yapıştırıp analiz ettiğinizde geri takip yapmayanlar burada görünür.</span>
+          <span>Listeleri analiz ettiğinizde geri takip yapmayanlar burada görünür.</span>
         </div>
       )}
     </section>

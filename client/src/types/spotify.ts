@@ -13,6 +13,11 @@ export interface SocialUser {
   externalUrl: string | null;
 }
 
+export interface SocialConnections {
+  following: SocialUser[];
+  followers: SocialUser[];
+}
+
 export interface SpotifyImage {
   url: string;
   height: number;

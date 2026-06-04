@@ -5,6 +5,8 @@ import { rateLimiter } from "../rateLimiter.js";
 const router = Router();
 const MAX_USER_IDS = 200;
 const SPOTIFY_USER_ID_BATCH_SIZE = 50;
+const SPOTIFY_PROFILE_VIEW_ENDPOINT = "https://spclient.wg.spotify.com/user-profile-view/v3/profile";
+
 
 interface SocialUser {
   id: string;
@@ -141,6 +143,106 @@ function toSocialUser(value: unknown): SocialUser | null {
     externalUrl,
   };
 }
+
+function getUserIdFromUri(uri: string): string | null {
+  const parts = uri.split(":");
+  if (parts.length === 3 && parts[0] === "spotify" && parts[1] === "user" && parts[2]) {
+    return parts[2];
+  }
+
+  return null;
+}
+
+function getCurrentUserId(value: unknown): string {
+  if (!value || typeof value !== "object" || !("id" in value)) {
+    throw new SpotifyRequestError(502, "Spotify kullanıcı kimliği alınamadı");
+  }
+
+  const id = (value as { id: unknown }).id;
+  if (typeof id !== "string" || id.length === 0) {
+    throw new SpotifyRequestError(502, "Spotify kullanıcı kimliği alınamadı");
+  }
+
+  return id;
+}
+
+function toProfileViewUser(value: unknown): SocialUser | null {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const record = value as Record<string, unknown>;
+  const uri = toStringField(record, "uri");
+  const idFromUri = uri ? getUserIdFromUri(uri) : null;
+  const id = idFromUri ?? toStringField(record, "id");
+  if (!id) {
+    return null;
+  }
+
+  const imageUrl = toStringField(record, "image_url") ?? toStringField(record, "imageUrl");
+  return {
+    id,
+    displayName: toStringField(record, "name") ?? toStringField(record, "display_name") ?? id,
+    imageUrl,
+    externalUrl: `https://open.spotify.com/user/${encodeURIComponent(id)}`,
+  };
+}
+
+function getProfilesFromPayload(value: unknown): SocialUser[] {
+  if (!value || typeof value !== "object" || !("profiles" in value)) {
+    throw new SpotifyRequestError(502, "Spotify takip listesi beklenen formatta değil");
+  }
+
+  const profiles = (value as { profiles: unknown }).profiles;
+  if (!Array.isArray(profiles)) {
+    throw new SpotifyRequestError(502, "Spotify takip listesi beklenen formatta değil");
+  }
+
+  const seen = new Set<string>();
+  const users: SocialUser[] = [];
+  for (const profile of profiles) {
+    const user = toProfileViewUser(profile);
+    if (!user || seen.has(user.id)) {
+      continue;
+    }
+
+    seen.add(user.id);
+    users.push(user);
+  }
+
+  return users;
+}
+
+async function fetchProfileViewUsers(accessToken: string, userId: string, list: "followers" | "following"): Promise<SocialUser[]> {
+  const payload = await rateLimiter.execute(() =>
+    fetchSpotifyJson(`${SPOTIFY_PROFILE_VIEW_ENDPOINT}/${encodeURIComponent(userId)}/${list}?market=from_token`, accessToken)
+  );
+
+  return getProfilesFromPayload(payload);
+}
+
+router.get("/connections", authMiddleware, async (req, res) => {
+  try {
+    const accessToken = getAccessToken(req);
+    const currentUser = await rateLimiter.execute(() =>
+      fetchSpotifyJson("https://api.spotify.com/v1/me", accessToken)
+    );
+    const userId = getCurrentUserId(currentUser);
+    const [following, followers] = await Promise.all([
+      fetchProfileViewUsers(accessToken, userId, "following"),
+      fetchProfileViewUsers(accessToken, userId, "followers"),
+    ]);
+
+    res.json({ following, followers });
+  } catch (error) {
+    console.error("Get social connections error:", error);
+    if (error instanceof SpotifyRequestError) {
+      res.status(error.status).json({ error: error.message });
+      return;
+    }
+    res.status(500).json({ error: "Spotify takip listeleri alınamadı" });
+  }
+});
 
 router.post("/users", authMiddleware, async (req, res) => {
   const ids = getIdsFromBody(req.body);

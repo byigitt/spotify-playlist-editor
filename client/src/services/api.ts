@@ -1,4 +1,4 @@
-import { SpotifyUser, SpotifyPlaylist, PlaylistTrackItem, SpotifyTrack, UnavailableTrack, SocialUser } from '../types/spotify';
+import { SpotifyUser, SpotifyPlaylist, PlaylistTrackItem, SpotifyTrack, UnavailableTrack, SocialUser, SocialConnections } from '../types/spotify';
 
 const API_BASE = '/api';
 
@@ -137,6 +137,9 @@ export const api = {
     sessionPost<{ success: boolean; removed: number }>(`/playlists/${playlistId}/unavailable`, session, { positions }, 'DELETE'),
 
   // Social followback tools
+  getSocialConnections: (session: string) =>
+    fetchApi<SocialConnections>('/social/connections', { session }),
+
   getSocialUsers: (session: string, ids: string[]) =>
     sessionPost<{ users: SocialUser[]; missing: string[] }>('/social/users', session, { ids }),
 

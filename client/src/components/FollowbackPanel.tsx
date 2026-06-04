@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AlertCircle, CheckCircle2, Loader2, UserMinus, Users } from 'lucide-react';
 import { ApiError, api } from '../services/api';
 import { useAuth } from '../context/AuthContext';
@@ -112,6 +112,13 @@ function mergeIds(first: ParsedAccount[], second: ParsedAccount[]): string[] {
   return [...ids];
 }
 
+function usersToInput(users: SocialUser[]): string {
+  const lines: string[] = [];
+  for (const user of users) {
+    lines.push(`${user.id} ${user.displayName}`);
+  }
+  return lines.join('\n');
+}
 
 function AccountList({ title, emptyText, accounts, profiles, selectedIds, selectable, getBadge, onToggleSelection }: AccountListProps) {
   return (
@@ -163,8 +170,10 @@ export function FollowbackPanel() {
   const [followersInput, setFollowersInput] = useState('');
   const [profiles, setProfiles] = useState<Record<string, SocialUser>>({});
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+  const [isLoadingConnections, setIsLoadingConnections] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isUnfollowing, setIsUnfollowing] = useState(false);
+  const [autoLoadAttempted, setAutoLoadAttempted] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -187,13 +196,60 @@ export function FollowbackPanel() {
     [selectedIds, followingIds]
   );
 
+  const loadSpotifyConnections = useCallback(async () => {
+    setMessage(null);
+    setError(null);
+
+    if (!session) {
+      setAutoLoadAttempted(true);
+      setError('Spotify oturumu bulunamadı.');
+      return;
+    }
+
+    setIsLoadingConnections(true);
+    try {
+      const { following: loadedFollowing, followers: loadedFollowers } = await api.getSocialConnections(session);
+      const nextProfiles: Record<string, SocialUser> = {};
+      for (const user of loadedFollowing) {
+        nextProfiles[user.id] = user;
+      }
+      for (const user of loadedFollowers) {
+        nextProfiles[user.id] = user;
+      }
+
+      const loadedFollowerIds = new Set(loadedFollowers.map(user => user.id));
+      const nextSelectedIds = new Set<string>();
+      for (const user of loadedFollowing) {
+        if (!loadedFollowerIds.has(user.id)) {
+          nextSelectedIds.add(user.id);
+        }
+      }
+
+      setProfiles(previous => ({ ...previous, ...nextProfiles }));
+      setFollowingInput(usersToInput(loadedFollowing));
+      setFollowersInput(usersToInput(loadedFollowers));
+      setSelectedIds(nextSelectedIds);
+      setAutoLoadAttempted(true);
+      setMessage(`${loadedFollowing.length} takip edilen, ${loadedFollowers.length} takipçi, ${nextSelectedIds.size} geri takip yapmayan kişi Spotify'dan yüklendi.`);
+    } catch (caughtError) {
+      setAutoLoadAttempted(true);
+      setError(`${messageFromError(caughtError, 'Spotify takip listeleri alınamadı.')} Elle liste yapıştırabilirsiniz.`);
+    } finally {
+      setIsLoadingConnections(false);
+    }
+  }, [session]);
+
+  useEffect(() => {
+    void loadSpotifyConnections();
+  }, [loadSpotifyConnections]);
+
   const handleAnalyze = async () => {
     setMessage(null);
     setError(null);
     setSelectedIds(new Set(notFollowingBackIds));
 
     if (following.length === 0 && followers.length === 0) {
-      setMessage('Takip edilenleri ve takipçileri görmek için listeleri yapıştırın.');
+      setMessage('Takip edilenleri ve takipçileri görmek için Spotify\'dan yenileyin veya listeleri elle yapıştırın.');
       return;
     }
 
@@ -300,11 +356,11 @@ export function FollowbackPanel() {
       <div className="followback-header">
         <div>
           <h2><Users size={20} /> Geri Takip Kontrolü</h2>
-          <p>Takip edilenleri ve takipçileri profil linki ya da kullanıcı ID'si olarak yapıştırın. Listeleri yan yana görün, geri takip yapmayanları seçip hızlıca takipten çıkın.</p>
+          <p>Takip edilenler ve takipçiler Spotify'dan yüklenir. Geri takip yapmayanları seçip hızlıca takipten çıkabilirsiniz.</p>
         </div>
-        <button className="btn btn-primary" onClick={handleAnalyze} disabled={isAnalyzing || isUnfollowing}>
-          {isAnalyzing ? <Loader2 className="spin" size={18} /> : <Users size={18} />}
-          <span>Listeleri Analiz Et</span>
+        <button className="btn btn-primary" onClick={loadSpotifyConnections} disabled={isLoadingConnections || isAnalyzing || isUnfollowing}>
+          {isLoadingConnections ? <Loader2 className="spin" size={18} /> : <Users size={18} />}
+          <span>{isLoadingConnections ? 'Yükleniyor' : 'Spotify\'dan Yenile'}</span>
         </button>
       </div>
 
@@ -315,33 +371,40 @@ export function FollowbackPanel() {
         </div>
       )}
 
-      <div className="followback-inputs">
-        <label>
-          <span>Takip edilenler</span>
-          <textarea
-            value={followingInput}
-            onChange={event => setFollowingInput(event.target.value)}
-            placeholder="Her satıra bir Spotify profil linki veya kullanıcı ID'si"
-            rows={6}
-          />
-          <small>{following.length} kullanıcı okundu</small>
-        </label>
-        <label>
-          <span>Takipçiler</span>
-          <textarea
-            value={followersInput}
-            onChange={event => setFollowersInput(event.target.value)}
-            placeholder="Her satıra bir Spotify profil linki veya kullanıcı ID'si"
-            rows={6}
-          />
-          <small>{followers.length} kullanıcı okundu</small>
-        </label>
-      </div>
+      <details className="followback-manual-import" open={!autoLoadAttempted || (Boolean(error) && following.length === 0 && followers.length === 0)}>
+        <summary>Elle liste yapıştır</summary>
+        <div className="followback-inputs">
+          <label>
+            <span>Takip edilenler</span>
+            <textarea
+              value={followingInput}
+              onChange={event => setFollowingInput(event.target.value)}
+              placeholder="Her satıra bir Spotify profil linki veya kullanıcı ID'si"
+              rows={6}
+            />
+            <small>{following.length} kullanıcı okundu</small>
+          </label>
+          <label>
+            <span>Takipçiler</span>
+            <textarea
+              value={followersInput}
+              onChange={event => setFollowersInput(event.target.value)}
+              placeholder="Her satıra bir Spotify profil linki veya kullanıcı ID'si"
+              rows={6}
+            />
+            <small>{followers.length} kullanıcı okundu</small>
+          </label>
+        </div>
+        <button className="btn btn-outline" onClick={handleAnalyze} disabled={isAnalyzing || isLoadingConnections || isUnfollowing}>
+          {isAnalyzing ? <Loader2 className="spin" size={18} /> : <Users size={18} />}
+          <span>Girilenleri Analiz Et</span>
+        </button>
+      </details>
 
       <div className="followback-source-lists">
         <AccountList
           title="Takip edilenler"
-          emptyText="Takip edilenler listesi boş."
+          emptyText={isLoadingConnections ? 'Spotify’dan takip edilenler yükleniyor.' : 'Takip edilenler listesi boş.'}
           accounts={following}
           profiles={profiles}
           selectedIds={selectedIds}
@@ -351,7 +414,7 @@ export function FollowbackPanel() {
         />
         <AccountList
           title="Takipçiler"
-          emptyText="Takipçi listesi boş."
+          emptyText={isLoadingConnections ? 'Spotify’dan takipçiler yükleniyor.' : 'Takipçi listesi boş.'}
           accounts={followers}
           profiles={profiles}
           selectedIds={selectedIds}
@@ -404,7 +467,7 @@ export function FollowbackPanel() {
       ) : (
         <div className="followback-empty">
           <Users size={32} />
-          <span>Listeleri analiz ettiğinizde geri takip yapmayanlar burada görünür.</span>
+          <span>Spotify'dan yenilediğinizde geri takip yapmayanlar burada görünür.</span>
         </div>
       )}
     </section>

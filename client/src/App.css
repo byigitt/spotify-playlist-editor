@@ -1411,6 +1411,30 @@ body {
   font-size: 0.85rem;
 }
 
+.followback-manual-import {
+  margin-bottom: 1rem;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.followback-manual-import summary {
+  padding: 0.7rem 0.8rem;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.followback-manual-import[open] {
+  padding: 0 0.8rem 0.8rem;
+}
+
+.followback-manual-import[open] summary {
+  margin: 0 -0.8rem 0.8rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
 .followback-inputs {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

@@ -1285,6 +1285,181 @@ body {
   height: 6px;
 }
 
+/* ============ FOLLOWBACK PANEL ============ */
+.followback-panel {
+  background: var(--bg-secondary);
+  padding: 1rem 1.25rem;
+  border-radius: 10px;
+  margin-bottom: 1.25rem;
+  border: 1px solid var(--border-color);
+}
+
+.followback-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  margin-bottom: 0.9rem;
+}
+
+.followback-header h2 {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1rem;
+  margin-bottom: 0.25rem;
+}
+
+.followback-header p {
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  max-width: 760px;
+}
+
+.followback-inputs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.followback-inputs label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.followback-inputs label span {
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.followback-inputs textarea {
+  width: 100%;
+  resize: vertical;
+  min-height: 130px;
+  padding: 0.75rem;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 0.9rem;
+}
+
+.followback-inputs textarea:focus {
+  outline: none;
+  border-color: var(--spotify-green);
+}
+
+.followback-inputs small {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+}
+
+.followback-results-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  padding-top: 0.25rem;
+  margin-bottom: 0.75rem;
+}
+
+.followback-results-header strong {
+  color: var(--text-primary);
+  font-size: 0.95rem;
+}
+
+.followback-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.followback-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 0.5rem;
+  max-height: 340px;
+  overflow-y: auto;
+  padding-right: 0.25rem;
+}
+
+.followback-user {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.6rem;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--bg-tertiary);
+  cursor: pointer;
+}
+
+.followback-user:hover {
+  background: var(--bg-hover);
+}
+
+.followback-user input {
+  accent-color: var(--spotify-green);
+}
+
+.followback-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.followback-avatar.placeholder {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-elevated);
+  color: var(--text-muted);
+}
+
+.followback-user-info {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.followback-user-info a {
+  color: var(--text-primary);
+  text-decoration: none;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.followback-user-info a:hover {
+  color: var(--spotify-green);
+  text-decoration: underline;
+}
+
+.followback-user-info small {
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.followback-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 1.5rem;
+  color: var(--text-secondary);
+  border: 1px dashed var(--border-color);
+  border-radius: 8px;
+}
+
 /* ============ LOADING & EMPTY ============ */
 .loading,
 .empty {
@@ -1348,6 +1523,16 @@ body {
   
   .action-buttons {
     justify-content: center;
+  }
+  
+  .followback-header,
+  .followback-results-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .followback-inputs {
+    grid-template-columns: 1fr;
   }
   
   .tracks-table .col-album,

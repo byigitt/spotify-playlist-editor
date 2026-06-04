@@ -10,6 +10,7 @@ import playlistRoutes from "./routes/playlists/index.js";
 import trackRoutes from "./routes/tracks.js";
 import artistRoutes from "./routes/artists.js";
 import jobRoutes from "./routes/jobs.js";
+import socialRoutes from "./routes/social.js";
 
 dotenv.config();
 
@@ -30,6 +31,7 @@ app.use("/api/me", userRoutes);
 app.use("/api/playlists", playlistRoutes);
 app.use("/api/tracks", trackRoutes);
 app.use("/api/artists", artistRoutes);
+app.use("/api/social", socialRoutes);
 app.use("/api/jobs", jobRoutes);
 
 // Docker/Production: serve client static files

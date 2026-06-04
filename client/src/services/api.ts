@@ -1,4 +1,4 @@
-import { SpotifyUser, SpotifyPlaylist, PlaylistTrackItem, SpotifyTrack, UnavailableTrack } from '../types/spotify';
+import { SpotifyUser, SpotifyPlaylist, PlaylistTrackItem, SpotifyTrack, UnavailableTrack, SocialUser } from '../types/spotify';
 
 const API_BASE = '/api';
 
@@ -135,6 +135,13 @@ export const api = {
 
   removeUnavailableTracks: (session: string, playlistId: string, positions: number[]) =>
     sessionPost<{ success: boolean; removed: number }>(`/playlists/${playlistId}/unavailable`, session, { positions }, 'DELETE'),
+
+  // Social followback tools
+  getSocialUsers: (session: string, ids: string[]) =>
+    sessionPost<{ users: SocialUser[]; missing: string[] }>('/social/users', session, { ids }),
+
+  unfollowUsers: (session: string, ids: string[]) =>
+    sessionPost<{ success: boolean; removed: number; ids: string[] }>('/social/following', session, { ids }, 'DELETE'),
 
   // Genre extraction
   extractGenres: (

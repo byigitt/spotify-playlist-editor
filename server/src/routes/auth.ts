@@ -13,6 +13,8 @@ router.get("/login", (req, res) => {
     "playlist-read-collaborative",
     "playlist-modify-public",
     "playlist-modify-private",
+    "user-follow-read",
+    "user-follow-modify",
   ];
   const authorizeURL = spotifyApi.createAuthorizeURL(scopes, "state123");
   res.json({ url: authorizeURL });

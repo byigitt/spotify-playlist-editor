@@ -5,6 +5,7 @@ import { Header } from './components/Header';
 import { PlaylistList } from './components/PlaylistList';
 import { TrackList } from './components/TrackList';
 import { ActionPanel } from './components/ActionPanel';
+import { FollowbackPanel } from './components/FollowbackPanel';
 import { usePlaylists, usePlaylistTracks, sortTracks } from './hooks/usePlaylists';
 import { SortConfig, TrackWithGenres } from './types/spotify';
 import { canEditPlaylist, isPlaylistCollaborator } from './utils/playlist';
@@ -166,6 +167,8 @@ function Dashboard() {
       </aside>
       
       <main className="main-content">
+        <FollowbackPanel />
+
         {selectedPlaylist && (
           <div className="playlist-header">
             <div className="playlist-cover">

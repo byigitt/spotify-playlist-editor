@@ -6,6 +6,13 @@ export interface SpotifyUser {
   country: string;
 }
 
+export interface SocialUser {
+  id: string;
+  displayName: string;
+  imageUrl: string | null;
+  externalUrl: string | null;
+}
+
 export interface SpotifyImage {
   url: string;
   height: number;

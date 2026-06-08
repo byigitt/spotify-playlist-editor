@@ -94,6 +94,10 @@ The app uses the following Spotify scopes:
 - `playlist-read-collaborative` - Read collaborative playlists
 - `playlist-modify-public` - Modify public playlists
 - `playlist-modify-private` - Modify private playlists
+- `user-follow-read` - Check follow permissions for followback tools
+- `user-follow-modify` - Unfollow selected users
+
+> Spotify's official Web API does not expose full follower/following user lists. The followback screen falls back to manual pasted lists when Spotify blocks automatic list loading.
 
 ## Project Structure
 

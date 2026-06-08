@@ -68,7 +68,7 @@ export function Header({ activeView, onViewChange }: HeaderProps) {
                 </button>
               </>
             ) : (
-              <button onClick={login} className="btn btn-primary">
+              <button onClick={() => void login()} className="btn btn-primary">
                 <LogIn size={18} />
                 <span>Spotify ile Giriş Yap</span>
               </button>

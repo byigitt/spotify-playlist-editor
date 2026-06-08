@@ -101,6 +101,22 @@ function messageFromError(error: unknown, fallback: string): string {
   return fallback;
 }
 
+function withManualFallback(message: string): string {
+  return /elle liste/i.test(message) ? message : `${message} Elle liste yapıştırabilirsiniz.`;
+}
+
+function shouldOfferReauth(error: unknown): boolean {
+  if (!(error instanceof ApiError)) {
+    return false;
+  }
+
+  if (error.status === 401) {
+    return true;
+  }
+
+  return error.status === 403 && /izin|giriş|oturum/i.test(error.message);
+}
+
 function mergeIds(first: ParsedAccount[], second: ParsedAccount[]): string[] {
   const ids = new Set<string>();
   for (const account of first) {
@@ -165,7 +181,7 @@ function AccountList({ title, emptyText, accounts, profiles, selectedIds, select
 }
 
 export function FollowbackPanel() {
-  const { session } = useAuth();
+  const { session, login } = useAuth();
   const [followingInput, setFollowingInput] = useState('');
   const [followersInput, setFollowersInput] = useState('');
   const [profiles, setProfiles] = useState<Record<string, SocialUser>>({});
@@ -174,6 +190,7 @@ export function FollowbackPanel() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isUnfollowing, setIsUnfollowing] = useState(false);
   const [autoLoadAttempted, setAutoLoadAttempted] = useState(false);
+  const [showReauthAction, setShowReauthAction] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -199,6 +216,7 @@ export function FollowbackPanel() {
   const loadSpotifyConnections = useCallback(async () => {
     setMessage(null);
     setError(null);
+    setShowReauthAction(false);
 
     if (!session) {
       setAutoLoadAttempted(true);
@@ -230,10 +248,12 @@ export function FollowbackPanel() {
       setFollowersInput(usersToInput(loadedFollowers));
       setSelectedIds(nextSelectedIds);
       setAutoLoadAttempted(true);
+      setShowReauthAction(false);
       setMessage(`${loadedFollowing.length} takip edilen, ${loadedFollowers.length} takipçi, ${nextSelectedIds.size} geri takip yapmayan kişi Spotify'dan yüklendi.`);
     } catch (caughtError) {
       setAutoLoadAttempted(true);
-      setError(`${messageFromError(caughtError, 'Spotify takip listeleri alınamadı.')} Elle liste yapıştırabilirsiniz.`);
+      setShowReauthAction(shouldOfferReauth(caughtError));
+      setError(withManualFallback(messageFromError(caughtError, 'Spotify takip listeleri alınamadı.')));
     } finally {
       setIsLoadingConnections(false);
     }
@@ -246,6 +266,7 @@ export function FollowbackPanel() {
   const handleAnalyze = async () => {
     setMessage(null);
     setError(null);
+    setShowReauthAction(false);
     setSelectedIds(new Set(notFollowingBackIds));
 
     if (following.length === 0 && followers.length === 0) {
@@ -331,6 +352,7 @@ export function FollowbackPanel() {
     setIsUnfollowing(true);
     setMessage(null);
     setError(null);
+    setShowReauthAction(false);
 
     try {
       const result = await api.unfollowUsers(session, ids);
@@ -345,6 +367,7 @@ export function FollowbackPanel() {
       });
       setMessage(`${result.removed} kullanıcı takipten çıkarıldı.`);
     } catch (caughtError) {
+      setShowReauthAction(shouldOfferReauth(caughtError));
       setError(messageFromError(caughtError, 'Kullanıcılar takipten çıkarılamadı.'));
     } finally {
       setIsUnfollowing(false);
@@ -356,7 +379,7 @@ export function FollowbackPanel() {
       <div className="followback-header">
         <div>
           <h2><Users size={20} /> Geri Takip Kontrolü</h2>
-          <p>Takip edilenler ve takipçiler Spotify'dan yüklenir. Geri takip yapmayanları seçip hızlıca takipten çıkabilirsiniz.</p>
+          <p>Spotify izin verirse takip edilenler ve takipçiler otomatik yüklenir. Spotify listeyi kapatırsa kullanıcı ID/link listelerini elle yapıştırabilirsiniz.</p>
         </div>
         <button className="btn btn-primary" onClick={loadSpotifyConnections} disabled={isLoadingConnections || isAnalyzing || isUnfollowing}>
           {isLoadingConnections ? <Loader2 className="spin" size={18} /> : <Users size={18} />}
@@ -368,6 +391,11 @@ export function FollowbackPanel() {
         <div className={`message ${error ? 'error' : 'success'}`}>
           {error ? <AlertCircle size={18} /> : <CheckCircle2 size={18} />}
           <span>{error ?? message}</span>
+          {error && showReauthAction && (
+            <button className="btn btn-outline" type="button" onClick={() => void login(true)}>
+              Spotify izinlerini yenile
+            </button>
+          )}
         </div>
       )}
 

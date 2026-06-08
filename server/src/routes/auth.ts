@@ -16,7 +16,8 @@ router.get("/login", (req, res) => {
     "user-follow-read",
     "user-follow-modify",
   ];
-  const authorizeURL = spotifyApi.createAuthorizeURL(scopes, "state123");
+  const showDialog = req.query.show_dialog === "true";
+  const authorizeURL = spotifyApi.createAuthorizeURL(scopes, "state123", showDialog);
   res.json({ url: authorizeURL });
 });
 

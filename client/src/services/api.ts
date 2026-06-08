@@ -27,19 +27,30 @@ async function fetchApi<T>(endpoint: string, options?: RequestInit & { session?:
   });
 
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ error: 'Request failed' }));
-    
-    // 403 Forbidden için özel mesaj
-    if (response.status === 403) {
-      throw new ApiError('Bu playlist\'i düzenleme yetkiniz yok', 403);
+    const errorBody: unknown = await response.json().catch(() => ({ error: 'Request failed' }));
+    let message = 'Request failed';
+
+    if (errorBody && typeof errorBody === 'object' && 'error' in errorBody) {
+      const errorValue = (errorBody as { error: unknown }).error;
+      if (typeof errorValue === 'string' && errorValue.length > 0) {
+        message = errorValue;
+      } else if (errorValue && typeof errorValue === 'object' && 'message' in errorValue) {
+        const nestedMessage = (errorValue as { message: unknown }).message;
+        if (typeof nestedMessage === 'string' && nestedMessage.length > 0) {
+          message = nestedMessage;
+        }
+      }
     }
-    
-    // 404 Not Found - Collaborator olmadığında Spotify bu hatayı veriyor
-    if (response.status === 404) {
-      throw new ApiError('Bu playlist\'e erişim yetkiniz yok. Collaborator değilsiniz.', 404);
+
+    if (message === 'Request failed') {
+      if (response.status === 403) {
+        message = 'Bu işlem için yetkiniz yok';
+      } else if (response.status === 404) {
+        message = 'Kaynak bulunamadı veya erişim yetkiniz yok';
+      }
     }
-    
-    throw new ApiError(error.error || 'Request failed', response.status);
+
+    throw new ApiError(message, response.status);
   }
 
   return response.json();
@@ -90,7 +101,7 @@ function sessionPost<T>(endpoint: string, session: string, body: object, method 
 
 export const api = {
   // Auth
-  getLoginUrl: () => fetchApi<{ url: string }>('/auth/login'),
+  getLoginUrl: (showDialog = false) => fetchApi<{ url: string }>(`/auth/login${showDialog ? '?show_dialog=true' : ''}`),
   logout: (session: string) => sessionPost<{ success: boolean }>('/auth/logout', session, {}),
 
   // User

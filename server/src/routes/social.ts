@@ -6,7 +6,8 @@ const router = Router();
 const MAX_USER_IDS = 200;
 const SPOTIFY_USER_ID_BATCH_SIZE = 50;
 const SPOTIFY_PROFILE_VIEW_ENDPOINT = "https://spclient.wg.spotify.com/user-profile-view/v3/profile";
-
+const SPOTIFY_REAUTH_MESSAGE = "Takip listelerini okuyabilmek için Spotify izinlerini yenilemeniz gerekiyor. Çıkış yapıp tekrar Spotify ile giriş yapın.";
+const SPOTIFY_CONNECTIONS_UNAVAILABLE_MESSAGE = "Spotify takip edilen/takipçi kullanıcı listelerini bu oturum türüyle paylaşmıyor. Bunun için resmi Spotify API desteği yok; listeleri elle yapıştırabilirsiniz.";
 
 interface SocialUser {
   id: string;
@@ -91,10 +92,11 @@ async function readSpotifyError(response: globalThis.Response): Promise<string> 
   return `Spotify isteği başarısız oldu (${response.status})`;
 }
 
-async function fetchSpotifyJson(url: string, accessToken: string): Promise<unknown> {
+async function fetchSpotifyJson(url: string, accessToken: string, extraHeaders: Record<string, string> = {}): Promise<unknown> {
   const response = await fetch(url, {
     headers: {
       Authorization: `Bearer ${accessToken}`,
+      ...extraHeaders,
     },
   });
 
@@ -103,6 +105,30 @@ async function fetchSpotifyJson(url: string, accessToken: string): Promise<unkno
   }
 
   return response.json();
+}
+
+function isScopeError(error: SpotifyRequestError): boolean {
+  return /scope|izin/i.test(error.message);
+}
+
+async function verifyUserFollowReadScope(accessToken: string, userId: string): Promise<void> {
+  const params = new URLSearchParams({ type: "user", ids: userId });
+  await rateLimiter.execute(() =>
+    fetchSpotifyJson(`https://api.spotify.com/v1/me/following/contains?${params.toString()}`, accessToken)
+  );
+}
+
+function getProfileViewHeaders(): Record<string, string> {
+  const headers: Record<string, string> = {
+    "App-Platform": "WebPlayer",
+    "User-Agent": "Mozilla/5.0",
+  };
+
+  if (process.env.SPOTIFY_CLIENT_ID) {
+    headers["Client-Id"] = process.env.SPOTIFY_CLIENT_ID;
+  }
+
+  return headers;
 }
 
 function toStringField(record: Record<string, unknown>, key: string): string | null {
@@ -215,19 +241,29 @@ function getProfilesFromPayload(value: unknown): SocialUser[] {
 
 async function fetchProfileViewUsers(accessToken: string, userId: string, list: "followers" | "following"): Promise<SocialUser[]> {
   const payload = await rateLimiter.execute(() =>
-    fetchSpotifyJson(`${SPOTIFY_PROFILE_VIEW_ENDPOINT}/${encodeURIComponent(userId)}/${list}?market=from_token`, accessToken)
+    fetchSpotifyJson(
+      `${SPOTIFY_PROFILE_VIEW_ENDPOINT}/${encodeURIComponent(userId)}/${list}?market=from_token`,
+      accessToken,
+      getProfileViewHeaders()
+    )
   );
 
   return getProfilesFromPayload(payload);
 }
 
 router.get("/connections", authMiddleware, async (req, res) => {
+  let officialFollowScopeVerified = false;
+
   try {
     const accessToken = getAccessToken(req);
     const currentUser = await rateLimiter.execute(() =>
       fetchSpotifyJson("https://api.spotify.com/v1/me", accessToken)
     );
     const userId = getCurrentUserId(currentUser);
+
+    await verifyUserFollowReadScope(accessToken, userId);
+    officialFollowScopeVerified = true;
+
     const [following, followers] = await Promise.all([
       fetchProfileViewUsers(accessToken, userId, "following"),
       fetchProfileViewUsers(accessToken, userId, "followers"),
@@ -237,6 +273,24 @@ router.get("/connections", authMiddleware, async (req, res) => {
   } catch (error) {
     console.error("Get social connections error:", error);
     if (error instanceof SpotifyRequestError) {
+      if (error.status === 401) {
+        res.status(officialFollowScopeVerified ? 502 : 401).json({
+          error: officialFollowScopeVerified
+            ? SPOTIFY_CONNECTIONS_UNAVAILABLE_MESSAGE
+            : "Spotify oturumu süresi doldu. Tekrar giriş yapın.",
+        });
+        return;
+      }
+
+      if (error.status === 403) {
+        res.status(officialFollowScopeVerified || !isScopeError(error) ? 502 : 403).json({
+          error: officialFollowScopeVerified || !isScopeError(error)
+            ? SPOTIFY_CONNECTIONS_UNAVAILABLE_MESSAGE
+            : SPOTIFY_REAUTH_MESSAGE,
+        });
+        return;
+      }
+
       res.status(error.status).json({ error: error.message });
       return;
     }

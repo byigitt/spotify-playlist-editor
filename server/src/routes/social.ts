@@ -7,6 +7,7 @@ const MAX_USER_IDS = 200;
 const SPOTIFY_USER_ID_BATCH_SIZE = 50;
 const SPOTIFY_PROFILE_VIEW_ENDPOINT = "https://spclient.wg.spotify.com/user-profile-view/v3/profile";
 const SPOTIFY_REAUTH_MESSAGE = "Takip listelerini okuyabilmek için Spotify izinlerini yenilemeniz gerekiyor. Çıkış yapıp tekrar Spotify ile giriş yapın.";
+const SPOTIFY_CONNECTIONS_UNAVAILABLE_STATUS = 409;
 const SPOTIFY_CONNECTIONS_UNAVAILABLE_MESSAGE = "Spotify takip edilen/takipçi kullanıcı listelerini bu oturum türüyle paylaşmıyor. Bunun için resmi Spotify API desteği yok; listeleri elle yapıştırabilirsiniz.";
 
 interface SocialUser {
@@ -274,7 +275,7 @@ router.get("/connections", authMiddleware, async (req, res) => {
     console.error("Get social connections error:", error);
     if (error instanceof SpotifyRequestError) {
       if (error.status === 401) {
-        res.status(officialFollowScopeVerified ? 502 : 401).json({
+        res.status(officialFollowScopeVerified ? SPOTIFY_CONNECTIONS_UNAVAILABLE_STATUS : 401).json({
           error: officialFollowScopeVerified
             ? SPOTIFY_CONNECTIONS_UNAVAILABLE_MESSAGE
             : "Spotify oturumu süresi doldu. Tekrar giriş yapın.",
@@ -283,8 +284,9 @@ router.get("/connections", authMiddleware, async (req, res) => {
       }
 
       if (error.status === 403) {
-        res.status(officialFollowScopeVerified || !isScopeError(error) ? 502 : 403).json({
-          error: officialFollowScopeVerified || !isScopeError(error)
+        const isConnectionsUnavailable = officialFollowScopeVerified || !isScopeError(error);
+        res.status(isConnectionsUnavailable ? SPOTIFY_CONNECTIONS_UNAVAILABLE_STATUS : 403).json({
+          error: isConnectionsUnavailable
             ? SPOTIFY_CONNECTIONS_UNAVAILABLE_MESSAGE
             : SPOTIFY_REAUTH_MESSAGE,
         });

@@ -6,7 +6,7 @@ interface AuthContextType {
   user: SpotifyUser | null;
   session: string | null;
   isLoading: boolean;
-  login: (showDialog?: boolean) => Promise<void>;
+  login: (showDialog?: boolean, clearCurrentSession?: boolean) => Promise<void>;
   logout: () => void;
 }
 
@@ -67,8 +67,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     fetchUser();
   }, [session]);
 
-  const login = async (showDialog = false) => {
+  const login = async (showDialog = false, clearCurrentSession = false) => {
     const { url } = await api.getLoginUrl(showDialog);
+
+    if (clearCurrentSession) {
+      if (session) {
+        await api.logout(session).catch(console.error);
+      }
+      localStorage.removeItem('spotify_session');
+      setSession(null);
+      setUser(null);
+    }
+
     window.location.href = url;
   };
 

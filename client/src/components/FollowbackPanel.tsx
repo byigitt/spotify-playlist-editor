@@ -379,12 +379,17 @@ export function FollowbackPanel() {
       <div className="followback-header">
         <div>
           <h2><Users size={20} /> Geri Takip Kontrolü</h2>
-          <p>Spotify izin verirse takip edilenler ve takipçiler otomatik yüklenir. Spotify listeyi kapatırsa kullanıcı ID/link listelerini elle yapıştırabilirsiniz.</p>
+          <p>Spotify izin verirse takip edilenler ve takipçiler otomatik yüklenir. İzinler eksikse yeni izinleri isteyin; Spotify listeyi kapatırsa kullanıcı ID/link listelerini elle yapıştırabilirsiniz.</p>
         </div>
-        <button className="btn btn-primary" onClick={loadSpotifyConnections} disabled={isLoadingConnections || isAnalyzing || isUnfollowing}>
-          {isLoadingConnections ? <Loader2 className="spin" size={18} /> : <Users size={18} />}
-          <span>{isLoadingConnections ? 'Yükleniyor' : 'Spotify\'dan Yenile'}</span>
-        </button>
+        <div className="followback-header-actions">
+          <button className="btn btn-outline" type="button" onClick={() => void login(true, true)} disabled={isLoadingConnections || isAnalyzing || isUnfollowing}>
+            Spotify izinlerini yenile
+          </button>
+          <button className="btn btn-primary" onClick={loadSpotifyConnections} disabled={isLoadingConnections || isAnalyzing || isUnfollowing}>
+            {isLoadingConnections ? <Loader2 className="spin" size={18} /> : <Users size={18} />}
+            <span>{isLoadingConnections ? 'Yükleniyor' : 'Spotify\'dan Yenile'}</span>
+          </button>
+        </div>
       </div>
 
       {(message || error) && (
@@ -392,7 +397,7 @@ export function FollowbackPanel() {
           {error ? <AlertCircle size={18} /> : <CheckCircle2 size={18} />}
           <span>{error ?? message}</span>
           {error && showReauthAction && (
-            <button className="btn btn-outline" type="button" onClick={() => void login(true)}>
+            <button className="btn btn-outline" type="button" onClick={() => void login(true, true)}>
               Spotify izinlerini yenile
             </button>
           )}

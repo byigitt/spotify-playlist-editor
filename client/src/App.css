@@ -1363,6 +1363,14 @@ body {
   max-width: 760px;
 }
 
+.followback-header-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
 .followback-source-lists {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1680,6 +1688,14 @@ body {
   .followback-results-header {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .followback-header-actions {
+    justify-content: stretch;
+  }
+
+  .followback-header-actions .btn {
+    flex: 1;
   }
 
   .followback-inputs {

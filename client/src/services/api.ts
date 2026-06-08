@@ -4,7 +4,7 @@ const API_BASE = '/api';
 
 export class ApiError extends Error {
   status: number;
-  
+
   constructor(message: string, status: number) {
     super(message);
     this.status = status;
@@ -12,45 +12,85 @@ export class ApiError extends Error {
   }
 }
 
+function getMessageFromErrorBody(errorBody: unknown): string | null {
+  if (!errorBody || typeof errorBody !== 'object' || !('error' in errorBody)) {
+    return null;
+  }
+
+  const errorValue = (errorBody as { error: unknown }).error;
+  if (typeof errorValue === 'string' && errorValue.trim().length > 0) {
+    return errorValue.trim();
+  }
+
+  if (errorValue && typeof errorValue === 'object' && 'message' in errorValue) {
+    const nestedMessage = (errorValue as { message: unknown }).message;
+    if (typeof nestedMessage === 'string' && nestedMessage.trim().length > 0) {
+      return nestedMessage.trim();
+    }
+  }
+
+  return null;
+}
+
+function getFallbackMessageForStatus(status: number): string {
+  if (status === 0) {
+    return 'Sunucuya ulaşılamadı. İnternet bağlantınızı kontrol edip tekrar deneyin.';
+  }
+  if (status === 401) {
+    return 'Oturum süresi doldu. Tekrar giriş yapın.';
+  }
+  if (status === 403) {
+    return 'Bu işlem için yetkiniz yok.';
+  }
+  if (status === 404) {
+    return 'Kaynak bulunamadı veya erişim yetkiniz yok.';
+  }
+  if (status === 502) {
+    return 'Sunucu geçici olarak yanıt veremiyor (502). Birazdan tekrar deneyin.';
+  }
+  if (status === 503) {
+    return 'Sunucu geçici olarak kullanılamıyor (503). Birazdan tekrar deneyin.';
+  }
+  if (status === 504) {
+    return 'Sunucu yanıtı zaman aşımına uğradı (504). Birazdan tekrar deneyin.';
+  }
+
+  return `İstek başarısız oldu (${status}).`;
+}
+
+async function getErrorMessage(response: Response): Promise<string> {
+  const contentType = response.headers.get('content-type') ?? '';
+
+  if (contentType.includes('application/json')) {
+    const errorBody: unknown = await response.json().catch(() => null);
+    return getMessageFromErrorBody(errorBody) ?? getFallbackMessageForStatus(response.status);
+  }
+
+  await response.text().catch(() => '');
+  return getFallbackMessageForStatus(response.status);
+}
+
 async function fetchApi<T>(endpoint: string, options?: RequestInit & { session?: string }): Promise<T> {
   const { session, ...fetchOptions } = options || {};
-  
+
   const headers: HeadersInit = {
     'Content-Type': 'application/json',
     ...(session && { Authorization: `Bearer ${session}` }),
     ...fetchOptions.headers,
   };
 
-  const response = await fetch(`${API_BASE}${endpoint}`, {
-    ...fetchOptions,
-    headers,
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE}${endpoint}`, {
+      ...fetchOptions,
+      headers,
+    });
+  } catch {
+    throw new ApiError(getFallbackMessageForStatus(0), 0);
+  }
 
   if (!response.ok) {
-    const errorBody: unknown = await response.json().catch(() => ({ error: 'Request failed' }));
-    let message = 'Request failed';
-
-    if (errorBody && typeof errorBody === 'object' && 'error' in errorBody) {
-      const errorValue = (errorBody as { error: unknown }).error;
-      if (typeof errorValue === 'string' && errorValue.length > 0) {
-        message = errorValue;
-      } else if (errorValue && typeof errorValue === 'object' && 'message' in errorValue) {
-        const nestedMessage = (errorValue as { message: unknown }).message;
-        if (typeof nestedMessage === 'string' && nestedMessage.length > 0) {
-          message = nestedMessage;
-        }
-      }
-    }
-
-    if (message === 'Request failed') {
-      if (response.status === 403) {
-        message = 'Bu işlem için yetkiniz yok';
-      } else if (response.status === 404) {
-        message = 'Kaynak bulunamadı veya erişim yetkiniz yok';
-      }
-    }
-
-    throw new ApiError(message, response.status);
+    throw new ApiError(await getErrorMessage(response), response.status);
   }
 
   return response.json();

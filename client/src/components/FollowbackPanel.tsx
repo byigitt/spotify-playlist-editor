@@ -33,47 +33,82 @@ const SPOTIFY_WEB_COPY_SCRIPT = `void (async () => {
   function getId(href) {
     try {
       const url = new URL(href, location.origin);
-      const match = url.pathname.match(/\\/user\\/([^/]+)/);
+      const match = url.pathname.match(/\\/user\\/([^/?#]+)/);
       return match ? decodeURIComponent(match[1]) : null;
     } catch {
       return null;
     }
   }
 
-  function addAnchor(anchor) {
-    const id = getId(anchor.getAttribute('href') || '');
-    if (!id) return;
+  const pageOwnerId = getId(location.href);
+  const isConnectionPage = /\\/(followers|following)(?:\\/)?$/.test(location.pathname);
 
-    const name = (anchor.textContent || anchor.getAttribute('aria-label') || id)
+  function getName(anchor, id) {
+    const row = anchor.closest('[role="row"], li, [data-testid="card-click-handler"], [data-testid="list-row"]');
+    const text = (row?.textContent || anchor.textContent || anchor.getAttribute('aria-label') || id)
       .replace(/\\s+/g, ' ')
       .trim();
+    return text || id;
+  }
+
+  function addAnchor(anchor) {
+    const id = getId(anchor.getAttribute('href') || '');
+    if (!id || (isConnectionPage && id === pageOwnerId)) return;
+
+    const name = getName(anchor, id);
     found.set(id, name && name !== id ? id + ' ' + name : id);
   }
 
-  const root = document.querySelector('[role="dialog"]') || document;
+  const root = document.querySelector('[role="dialog"]') || document.querySelector('main') || document;
 
   function grabVisibleUsers() {
     root.querySelectorAll('a[href*="/user/"]').forEach(addAnchor);
   }
 
-  const scrollables = [...root.querySelectorAll('*')]
-    .filter((element) => {
-      const style = getComputedStyle(element);
-      return element.scrollHeight > element.clientHeight + 80 && /(auto|scroll|overlay)/.test(style.overflowY);
-    })
-    .sort((first, second) =>
-      (second.scrollHeight - second.clientHeight) - (first.scrollHeight - first.clientHeight)
-    );
-  const scroller = scrollables[0] || document.scrollingElement || document.documentElement;
+  function getScrollTargets() {
+    const candidates = [
+      document.scrollingElement,
+      document.documentElement,
+      document.body,
+      root,
+      ...root.querySelectorAll('*'),
+    ];
+    const seen = new Set();
+    return candidates.filter((element) => {
+      if (!element || seen.has(element)) return false;
+      seen.add(element);
+      return element.scrollHeight > element.clientHeight + 60;
+    });
+  }
+
+  function scrollTarget(element) {
+    const before = element.scrollTop;
+    const amount = Math.max(320, Math.floor((element.clientHeight || window.innerHeight) * 0.85));
+    element.scrollTop = Math.min(element.scrollTop + amount, element.scrollHeight);
+    return element.scrollTop !== before;
+  }
+
+  for (const target of getScrollTargets()) {
+    target.scrollTop = 0;
+  }
+  window.scrollTo(0, 0);
 
   let lastSize = -1;
   let stuckCount = 0;
-  for (let index = 0; index < 120 && stuckCount < 8; index += 1) {
+  for (let index = 0; index < 180 && stuckCount < 12; index += 1) {
     grabVisibleUsers();
-    scroller.scrollTop = scroller.scrollHeight;
-    await sleep(450);
 
-    if (found.size === lastSize) {
+    let moved = false;
+    for (const target of getScrollTargets()) {
+      moved = scrollTarget(target) || moved;
+    }
+    const previousWindowY = window.scrollY;
+    window.scrollBy(0, Math.max(360, Math.floor(window.innerHeight * 0.85)));
+    moved = moved || window.scrollY !== previousWindowY;
+
+    await sleep(350);
+
+    if (found.size === lastSize && !moved) {
       stuckCount += 1;
     } else {
       lastSize = found.size;
@@ -84,7 +119,7 @@ const SPOTIFY_WEB_COPY_SCRIPT = `void (async () => {
   grabVisibleUsers();
   const output = [...found.values()].join('\\n');
   if (!output) {
-    alert('Kullanıcı bulunamadı. Takipçi veya takip edilen penceresi açıkken tekrar deneyin.');
+    alert('Kullanıcı bulunamadı. Takipçi veya takip edilen listesi ekranda görünürken tekrar deneyin.');
     return;
   }
 
@@ -109,7 +144,7 @@ const SPOTIFY_WEB_COPY_SCRIPT = `void (async () => {
     return;
   }
 
-  alert(found.size + ' kullanıcı panoya kopyalandı. Şimdi uygulamadaki doğru kutuya yapıştırın.');
+  alert(found.size + ' kullanıcı panoya kopyalandı. Sayı eksikse sayfanın listeyi yüklediğinden emin olup tekrar çalıştırın.');
 })();`;
 
 function cleanId(value: string): string {
@@ -544,9 +579,9 @@ export function FollowbackPanel() {
             </button>
           </div>
           <ol>
-            <li>open.spotify.com üzerinde profilinizden Takipçiler veya Takip edilenler penceresini açın.</li>
-            <li>Aşağıdaki script’i kopyalayıp tarayıcı geliştirici konsolunda çalıştırın.</li>
-            <li>Panoya kopyalanan satırları bu ekrandaki doğru kutuya yapıştırıp analiz edin.</li>
+            <li>open.spotify.com üzerinde Takipçiler veya Takip edilenler sayfasını/penceresini açıp listenin görünmesini bekleyin.</li>
+            <li>Aşağıdaki script’i kopyalayıp tarayıcı geliştirici konsolunda çalıştırın; script listeyi aşağı kaydırarak toplamaya çalışır.</li>
+            <li>Sayı eksik görünürse sayfayı biraz aşağı kaydırıp script’i tekrar çalıştırın. Panodaki satırları bu ekrandaki doğru kutuya yapıştırıp analiz edin.</li>
           </ol>
           <div className="followback-copy-helper-actions">
             <button className="btn btn-primary" type="button" onClick={() => void copySpotifyWebScript()}>

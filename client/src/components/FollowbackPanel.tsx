@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { AlertCircle, CheckCircle2, Loader2, UserMinus, Users } from 'lucide-react';
+import { AlertCircle, CheckCircle2, ClipboardCopy, Loader2, UserMinus, Users } from 'lucide-react';
 import { ApiError, api } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { SocialUser } from '../types/spotify';
@@ -20,9 +20,97 @@ interface AccountListProps {
   onToggleSelection: (id: string) => void;
 }
 
-const SPOTIFY_PROFILE_URL_PATTERN = /open\.spotify\.com\/user\/([^/?#\s]+)/i;
-const SPOTIFY_PROFILE_URI_PATTERN = /spotify:user:([^:\s]+)/i;
-const TRAILING_PUNCTUATION_PATTERN = /[),.;]+$/;
+const SPOTIFY_PROFILE_URL_PATTERN = /open\.spotify\.com\/user\/([^/?#\s"'<>]+)/i;
+const SPOTIFY_PROFILE_PATH_PATTERN = /(?:https?:\/\/open\.spotify\.com)?\/user\/([^/?#\s"'<>]+)/gi;
+const SPOTIFY_PROFILE_URI_PATTERN = /spotify:user:([^:\s"'<>]+)/i;
+const SPOTIFY_PROFILE_URI_GLOBAL_PATTERN = /spotify:user:([^:\s"'<>]+)/gi;
+const TRAILING_PUNCTUATION_PATTERN = /["'),.;]+$/;
+const SOCIAL_USERS_BATCH_SIZE = 200;
+const SPOTIFY_WEB_COPY_SCRIPT = `void (async () => {
+  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  const found = new Map();
+
+  function getId(href) {
+    try {
+      const url = new URL(href, location.origin);
+      const match = url.pathname.match(/\\/user\\/([^/]+)/);
+      return match ? decodeURIComponent(match[1]) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function addAnchor(anchor) {
+    const id = getId(anchor.getAttribute('href') || '');
+    if (!id) return;
+
+    const name = (anchor.textContent || anchor.getAttribute('aria-label') || id)
+      .replace(/\\s+/g, ' ')
+      .trim();
+    found.set(id, name && name !== id ? id + ' ' + name : id);
+  }
+
+  const root = document.querySelector('[role="dialog"]') || document;
+
+  function grabVisibleUsers() {
+    root.querySelectorAll('a[href*="/user/"]').forEach(addAnchor);
+  }
+
+  const scrollables = [...root.querySelectorAll('*')]
+    .filter((element) => {
+      const style = getComputedStyle(element);
+      return element.scrollHeight > element.clientHeight + 80 && /(auto|scroll|overlay)/.test(style.overflowY);
+    })
+    .sort((first, second) =>
+      (second.scrollHeight - second.clientHeight) - (first.scrollHeight - first.clientHeight)
+    );
+  const scroller = scrollables[0] || document.scrollingElement || document.documentElement;
+
+  let lastSize = -1;
+  let stuckCount = 0;
+  for (let index = 0; index < 120 && stuckCount < 8; index += 1) {
+    grabVisibleUsers();
+    scroller.scrollTop = scroller.scrollHeight;
+    await sleep(450);
+
+    if (found.size === lastSize) {
+      stuckCount += 1;
+    } else {
+      lastSize = found.size;
+      stuckCount = 0;
+    }
+  }
+
+  grabVisibleUsers();
+  const output = [...found.values()].join('\\n');
+  if (!output) {
+    alert('Kullanıcı bulunamadı. Takipçi veya takip edilen penceresi açıkken tekrar deneyin.');
+    return;
+  }
+
+  let copied = false;
+  try {
+    await navigator.clipboard.writeText(output);
+    copied = true;
+  } catch {
+    const textarea = document.createElement('textarea');
+    textarea.value = output;
+    textarea.style.position = 'fixed';
+    textarea.style.left = '-9999px';
+    document.body.appendChild(textarea);
+    textarea.focus();
+    textarea.select();
+    copied = document.execCommand('copy');
+    textarea.remove();
+  }
+
+  if (!copied) {
+    window.prompt('Otomatik kopyalanamadı. Listeyi elle kopyalayın:', output);
+    return;
+  }
+
+  alert(found.size + ' kullanıcı panoya kopyalandı. Şimdi uygulamadaki doğru kutuya yapıştırın.');
+})();`;
 
 function cleanId(value: string): string {
   const trimmed = value.trim().replace(TRAILING_PUNCTUATION_PATTERN, '');
@@ -63,7 +151,10 @@ function getUserId(line: string): string | null {
   }
 
   const firstToken = value.split(/\s+/)[0];
-  return firstToken ? cleanId(firstToken) : null;
+  if (!firstToken || /[<>"'=]/.test(firstToken)) {
+    return null;
+  }
+  return cleanId(firstToken);
 }
 
 function getLabel(line: string, id: string): string {
@@ -76,16 +167,27 @@ function getLabel(line: string, id: string): string {
 
 function parseAccounts(input: string): ParsedAccount[] {
   const accounts = new Map<string, ParsedAccount>();
-  for (const line of input.split(/\r?\n/)) {
-    const id = getUserId(line);
+  const addAccount = (id: string | null, label: string) => {
     if (!id || accounts.has(id)) {
-      continue;
+      return;
     }
 
-    accounts.set(id, {
-      id,
-      label: getLabel(line, id),
-    });
+    accounts.set(id, { id, label });
+  };
+
+  for (const line of input.split(/\r?\n/)) {
+    const id = getUserId(line);
+    addAccount(id, id ? getLabel(line, id) : '');
+  }
+
+  SPOTIFY_PROFILE_PATH_PATTERN.lastIndex = 0;
+  for (const match of input.matchAll(SPOTIFY_PROFILE_PATH_PATTERN)) {
+    addAccount(cleanId(match[1]), cleanId(match[1]));
+  }
+
+  SPOTIFY_PROFILE_URI_GLOBAL_PATTERN.lastIndex = 0;
+  for (const match of input.matchAll(SPOTIFY_PROFILE_URI_GLOBAL_PATTERN)) {
+    addAccount(cleanId(match[1]), cleanId(match[1]));
   }
 
   return [...accounts.values()];
@@ -191,6 +293,8 @@ export function FollowbackPanel() {
   const [isUnfollowing, setIsUnfollowing] = useState(false);
   const [autoLoadAttempted, setAutoLoadAttempted] = useState(false);
   const [showReauthAction, setShowReauthAction] = useState(false);
+  const [showCopyHelper, setShowCopyHelper] = useState(false);
+  const [scriptCopyMessage, setScriptCopyMessage] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -263,6 +367,19 @@ export function FollowbackPanel() {
     void loadSpotifyConnections();
   }, [loadSpotifyConnections]);
 
+  const copySpotifyWebScript = async () => {
+    try {
+      if (!navigator.clipboard) {
+        throw new Error('Clipboard API unavailable');
+      }
+
+      await navigator.clipboard.writeText(SPOTIFY_WEB_COPY_SCRIPT);
+      setScriptCopyMessage('Script kopyalandı. Spotify Web konsoluna yapıştırabilirsiniz.');
+    } catch {
+      setScriptCopyMessage('Otomatik kopyalanamadı. Script kutusunu seçip elle kopyalayın.');
+    }
+  };
+
   const handleAnalyze = async () => {
     setMessage(null);
     setError(null);
@@ -283,15 +400,23 @@ export function FollowbackPanel() {
     setIsAnalyzing(true);
     try {
       if (idsToFetch.length > 0) {
-        const { users, missing } = await api.getSocialUsers(session, idsToFetch);
+        const fetchedUsers: SocialUser[] = [];
+        const missingUsers: string[] = [];
+        for (let index = 0; index < idsToFetch.length; index += SOCIAL_USERS_BATCH_SIZE) {
+          const batch = idsToFetch.slice(index, index + SOCIAL_USERS_BATCH_SIZE);
+          const { users, missing } = await api.getSocialUsers(session, batch);
+          fetchedUsers.push(...users);
+          missingUsers.push(...missing);
+        }
+
         setProfiles(previous => {
           const next = { ...previous };
-          for (const user of users) {
+          for (const user of fetchedUsers) {
             next[user.id] = user;
           }
           return next;
         });
-        const missingText = missing.length > 0 ? ` ${missing.length} profil Spotify'dan alınamadı.` : '';
+        const missingText = missingUsers.length > 0 ? ` ${missingUsers.length} profil Spotify'dan alınamadı.` : '';
         setMessage(`${following.length} takip edilen, ${followers.length} takipçi, ${notFollowingBack.length} geri takip yapmayan kişi bulundu.${missingText}`);
       }
     } catch (caughtError) {
@@ -328,12 +453,11 @@ export function FollowbackPanel() {
   };
 
   const removeUnfollowedFromInput = (removedIds: Set<string>) => {
-    setFollowingInput(previous => previous
-      .split(/\r?\n/)
-      .filter(line => {
-        const id = getUserId(line);
-        return !id || !removedIds.has(id);
-      })
+    setFollowingInput(previous => parseAccounts(previous)
+      .filter(account => !removedIds.has(account.id))
+      .map(account => account.label === account.id || account.label.startsWith(`${account.id} `)
+        ? account.label
+        : `${account.id} ${account.label}`)
       .join('\n'));
   };
 
@@ -382,6 +506,10 @@ export function FollowbackPanel() {
           <p>Spotify izin verirse takip edilenler ve takipçiler otomatik yüklenir. İzinler eksikse yeni izinleri isteyin; Spotify listeyi kapatırsa kullanıcı ID/link listelerini elle yapıştırabilirsiniz.</p>
         </div>
         <div className="followback-header-actions">
+          <button className="btn btn-outline" type="button" onClick={() => setShowCopyHelper(previous => !previous)}>
+            <ClipboardCopy size={18} />
+            <span>Web’den kopyala</span>
+          </button>
           <button className="btn btn-outline" type="button" onClick={() => void login(true, true)} disabled={isLoadingConnections || isAnalyzing || isUnfollowing}>
             Spotify izinlerini yenile
           </button>
@@ -404,6 +532,33 @@ export function FollowbackPanel() {
         </div>
       )}
 
+      {showCopyHelper && (
+        <div className="followback-copy-helper">
+          <div className="followback-copy-helper-header">
+            <div>
+              <strong>Spotify Web’den liste kopyala</strong>
+              <p>Bu yöntem sadece açık Spotify sayfasındaki kullanıcı linklerini okur. Cookie veya token uygulamaya gelmez.</p>
+            </div>
+            <button className="btn btn-outline" type="button" onClick={() => setShowCopyHelper(false)}>
+              Kapat
+            </button>
+          </div>
+          <ol>
+            <li>open.spotify.com üzerinde profilinizden Takipçiler veya Takip edilenler penceresini açın.</li>
+            <li>Aşağıdaki script’i kopyalayıp tarayıcı geliştirici konsolunda çalıştırın.</li>
+            <li>Panoya kopyalanan satırları bu ekrandaki doğru kutuya yapıştırıp analiz edin.</li>
+          </ol>
+          <div className="followback-copy-helper-actions">
+            <button className="btn btn-primary" type="button" onClick={() => void copySpotifyWebScript()}>
+              <ClipboardCopy size={18} />
+              <span>Script’i kopyala</span>
+            </button>
+            {scriptCopyMessage && <span className="followback-copy-helper-status">{scriptCopyMessage}</span>}
+          </div>
+          <textarea readOnly value={SPOTIFY_WEB_COPY_SCRIPT} rows={10} aria-label="Spotify Web kopyalama scripti" />
+        </div>
+      )}
+
       <details className="followback-manual-import" open={!autoLoadAttempted || (Boolean(error) && following.length === 0 && followers.length === 0)}>
         <summary>Elle liste yapıştır</summary>
         <div className="followback-inputs">
@@ -412,7 +567,7 @@ export function FollowbackPanel() {
             <textarea
               value={followingInput}
               onChange={event => setFollowingInput(event.target.value)}
-              placeholder="Her satıra bir Spotify profil linki veya kullanıcı ID'si"
+              placeholder="Spotify profil linki, kullanıcı ID'si, console çıktısı veya raw HTML"
               rows={6}
             />
             <small>{following.length} kullanıcı okundu</small>
@@ -422,7 +577,7 @@ export function FollowbackPanel() {
             <textarea
               value={followersInput}
               onChange={event => setFollowersInput(event.target.value)}
-              placeholder="Her satıra bir Spotify profil linki veya kullanıcı ID'si"
+              placeholder="Spotify profil linki, kullanıcı ID'si, console çıktısı veya raw HTML"
               rows={6}
             />
             <small>{followers.length} kullanıcı okundu</small>

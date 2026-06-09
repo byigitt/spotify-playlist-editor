@@ -59,7 +59,15 @@ const SPOTIFY_WEB_COPY_SCRIPT = `void (async () => {
     found.set(id, name && name !== id ? id + ' ' + name : id);
   }
 
-  const root = document.querySelector('[role="dialog"]') || document.querySelector('main') || document;
+  const visibleDialogs = [...document.querySelectorAll('[role="dialog"]')]
+    .filter((element) => {
+      const rect = element.getBoundingClientRect();
+      return rect.width > 0 && rect.height > 0;
+    });
+  const root = visibleDialogs.find((element) => element.querySelector('a[href*="/user/"]'))
+    || visibleDialogs[0]
+    || document.querySelector('main')
+    || document;
 
   function grabVisibleUsers() {
     root.querySelectorAll('a[href*="/user/"]').forEach(addAnchor);
